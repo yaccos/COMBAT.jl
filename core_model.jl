@@ -8,17 +8,17 @@ using Distributions
 n_targets = 100
 starting_population = 1e6cell
 treatment_length = 86400u"s" # 
-initial_antibiotic_level = 1e6u"mol"/cell
+initial_antibiotic_level = 1e6/cell
 maximum_kill_rate = 0.001u"1/s"
 killing_threshold = 60
 replication_threshold = 50
 r_max = 0.00025u"1/s"
 max_kill_rate = 0.001u"1/s"
-intracellular_volume = 1e-15u"L"
+intracellular_volume = 1e-15u"L"/cell
 unbinding_rate = 0.01u"1/s"
 carrying_capacity = 1e9cell
 molecular_weight = 555.5u"g/mol"
-binding_rate = 1u"L/mol/s"
+binding_rate = 1u"1/mol/s"
 n_A = AvogadroConstant
 binding_coefficient = binding_rate / (intracellular_volume * n_A)
 
@@ -33,6 +33,21 @@ hypergeom_density_mat = hypergeom_density_fun.(0:n_targets,(0:n_targets)')
 function hypergeom_density(i,x)
     binomial(x, i) * binomial(2*n_targets-x, n_targets-i)/ binomial(2*n_targets, n_targets)
 end
+
+# Initial conditions
+B_0 = zeros(typeof(1.0cell),n_targets+1)
+B_0[1] =  1.0e+6cell
+
+A_0 = initial_antibiotic_level
+
+AT = zero(A_0)
+
+T_0 = zero(A_0)
+
+
+
+
+
 
 function ode_system!(du, u, p, t)
     B = @view u[1:(n_targets + 1)]
@@ -77,4 +92,3 @@ function ode_system!(du, u, p, t)
     dT[] = -binding_coefficient * AT + unbinding_rate * AT + targets_released
     dAT[] = binding_coefficient * AT - unbinding_rate * AT + targets_bound
 end
-    
