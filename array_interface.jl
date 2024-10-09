@@ -1,13 +1,14 @@
 using Unitful
+using StaticArrays
 
-mutable struct DiscreteSimulationVariables{T<:Number, U<:Number, V<:Number, W<:Number} <: AbstractVector{Number}
+mutable struct DiscreteSimulationVariables{T<:Number, U<:Number, V<:Number, W<:Number, N} <: AbstractVector{Number}
     A::T
     T::U
     AT::V
-    B::Vector{W}
+    B::SVector{N,W}
 end
 
-n_scalars(::DiscreteSimulationVariables{T, U, V, W}) where {T, U, V, W} =  length(fieldnames(DiscreteSimulationVariables{T, U, V, W})) - 1
+n_scalars(::DiscreteSimulationVariables{T, U, V, W, N}) where {T, U, V, W, N} =  length(fieldnames(DiscreteSimulationVariables{T, U, V, W, N})) - 1
 
 # Define required AbstractVector methods
 Base.length(dsv::DiscreteSimulationVariables) = n_scalars(dsv) + length(dsv.B)
@@ -41,14 +42,14 @@ end
 # Implement broadcasting support
 # Base.axes(x::DiscreteSimulationVariables) = (Base.OneTo(n_scalars(x)+length(x.B)),)
 Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables}) = Broadcast.Style{DiscreteSimulationVariables}()
-Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables{T, U, V, W}}) where {T, U, V, W} = Broadcast.Style{DiscreteSimulationVariables{T, U, V, W}}()
-Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables{T, U, V, W}}, ::Any) where {T, U, V, W} = Broadcast.Style{DiscreteSimulationVariables{T, U, V, W}}()
+Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables{T, U, V, W, N}}) where {T, U, V, W, N} = Broadcast.Style{DiscreteSimulationVariables{T, U, V, W, N}}()
+Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables{T, U, V, W, N}}, ::Any) where {T, U, V, W, N} = Broadcast.Style{DiscreteSimulationVariables{T, U, V, W, N}}()
 Broadcast.Style{DiscreteSimulationVariables}()
 Base.BroadcastStyle(::Broadcast.Style{DiscreteSimulationVariables},::Base.Broadcast.BroadcastStyle) = Broadcast.Style{DiscreteSimulationVariables}()
 # Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables}) = Base.Broadcast.DefaultArrayStyle{1}()
 
 
-function Base.similar(x::DiscreteSimulationVariables{T, U, V, W}) where {T, U, V, W}
+function Base.similar(x::DiscreteSimulationVariables{T, U, V, W, N}) where {T, U, V, W, N}
     DiscreteSimulationVariables(T(0),U(0),V(0),similar(Array{W}, axes(x.B)))
 end
 
@@ -60,12 +61,12 @@ function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulati
     V = typeof(x.AT)
     W = eltype(x.B)
     
-    DiscreteSimulationVariables(T(0),U(0),V(0),similar(Array{W}, axes(x.B)))
+    DiscreteSimulationVariables(T(0),U(0),V(0),similar(MVector{N,W}, axes(x.B)))
 end
 
 
 
-function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables{T, U, V, W}}}) where {T, U, V, W}
+function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables{T, U, V, W, N}}}) where {T, U, V, W, N}
     # Scan the inputs for the DiscreteSimulationVariables:
     x = find_simulation_variables(bc)
     DiscreteSimulationVariables(T(0),U(0),V(0),similar(Array{W}, axes(x.B)))
@@ -93,7 +94,8 @@ find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 @inline unpack_args(x::Tuple, field::Symbol) = map(element -> unpack_args(element, field), x)
 
 # The constant propagation is appearently important to ensure type stability
-# Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield 
+# Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield
+# It could potentially also be resolved by passing Val{} types around, but that would be more trouble than it is worth
 # This one is for copies and immutable fields
 Base.@constprop :aggressive get_field_res(f, args::Tuple, field::Symbol) = copy(Broadcast.Broadcasted(f,unpack_args(args, field)))
 # This one is for copying to a mutable field

@@ -4,12 +4,14 @@ function create_simulation_variables()
     A = 1.0u"m"   # meters
     T = 2.0u"s"   # seconds
     AT = 3.0u"m/s"  # meters per second
-    B = [1.0u"m", 2.0u"m", 3.0u"m"]  # vector of meters
+    B = @SVector [1.0u"m", 2.0u"m", 3.0u"m"]  # vector of meters
 
     return DiscreteSimulationVariables(A, T, AT, B)
 end
 
 val = create_simulation_variables()
+
+val .+ val
 
 val .+= val
 
@@ -26,15 +28,19 @@ function g(val,N)
     end
 end
 
-N = 10
+N = 1e10
+
+f(val, N)
 
 g(val,N)
+
+@time f(val, N)
 
 @time g(val, N)
 
 Profile.init()
 
-@profview_allocs g(val,N)
+@profview_allocs f(val,N)
 
 using ProfileView
 
