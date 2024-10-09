@@ -152,3 +152,22 @@ end
 map(x -> x^2, (5,9,19))
 
 map(x -> x^2, ())
+
+using LabelledArrays
+
+p = @SLVector [10.0, 28.0, 8 / 3] (:σ, :ρ, :β)
+
+p = @LArray [10.0, 28.0, 8 / 3] (:σ, :ρ, :β)
+
+ps = @SLVector [10.0, 28.0, 8 / 3] (:σ, :ρ, :β)
+
+h = @LArray [10.0, 28.0, 8 / 3]
+
+using StaticArrays
+
+arr = [2.4,3.14,2.71828]
+
+arr = SizedArray(SA[2.4,3.14,2.71828])
+
+arr_2 = MArray(SA[2.4,3.14,2.71828])
+

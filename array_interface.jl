@@ -85,6 +85,7 @@ find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 # 1. Recursing on types by using head-tail concatenation: Same problem
 # 2. Generated functions: Same problem
 # 3. Make a lazy view over the argument tuple: Tuple types cannot be subtyped
+# 4. Run Julia with flag --optimize=3: No effect
 @inline unpack_args(x::Any,::Symbol) = x
 @inline unpack_args(x::DiscreteSimulationVariables,field::Symbol) = getfield(x, field)
 @inline unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = Broadcast.Broadcasted(x.f,unpack_args(x.args,field))

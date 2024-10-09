@@ -44,11 +44,6 @@ AT = zero(A_0)
 
 T_0 = zero(A_0)
 
-
-
-
-
-
 function ode_system!(du, u, p, t)
     B = @view u[1:(n_targets + 1)]
     dB = @view du[1:(n_targets + 1)]

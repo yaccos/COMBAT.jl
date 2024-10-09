@@ -26,7 +26,7 @@ function g(val,N)
     end
 end
 
-N = 100
+N = 10
 
 g(val,N)
 
