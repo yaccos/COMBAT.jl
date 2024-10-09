@@ -26,9 +26,11 @@ function g(val,N)
     end
 end
 
-N = 1e1
+N = 100
 
 g(val,N)
+
+@time g(val, N)
 
 Profile.init()
 
