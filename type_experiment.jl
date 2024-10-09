@@ -1,12 +1,6 @@
 using Unitful
 using MultiScaleArrays
 
-mutable struct DiscreteSimulationVariables{T<:Number, U<:Number, V<:Number, W<:Number} <: AbstractMultiScaleArrayLeaf{Float64}
-    A::T
-    T::U
-    AT::V
-    B::Vector{W}
-end
 
 function create_simulation_variables()
     A = 1.0u"m"   # meters
@@ -16,6 +10,58 @@ function create_simulation_variables()
 
     return DiscreteSimulationVariables(A, T, AT, B)
 end
+
+val = create_simulation_variables()
+val .+= val
+
+
+
+@code_warntype val .+ val
+
+@code_warntype val .* val
+
+val_2 = copy(val)
+
+val_3 = copy(val)
+
+@code_warntype copy(val)
+
+@code_warntype broadcast!(*,val_3, val_2, val_2)
+
+
+using Cthulhu
+
+Cthulhu.@descend broadcast(+, val,val)
+
+Cthulhu.@descend broadcast!(+,val,val,val)
+
+Cthulhu.@descend broadcast!(+,val_3, val_2, val_2)
+
+@time val_3 .= val_2 .+ val_2
+
+@time val_4 = val_2 .+ val_2
+
+@code_warntype broadcast!(+,val_3, val_2, val_2)
+
+@code_warntype fieldnames(val)
+
+#Cthulhu.@descend fieldnames(val)
+
+#Cthulhu.@descend n_scalars(val)
+
+typeof(val)
+
+A = rand(100)
+
+B = zeros(100)
+
+C = copyto!(B,A)
+
+map(i -> setindex!(A,i,i), eachindex(A))
+
+A
+
+typeof(typeof(val))
 
 n_scalars = length(fieldnames(DiscreteSimulationVariables)) - 1
 
@@ -74,4 +120,32 @@ fieldnames(l)
 
 
 Broadcast.Broadcasted
+
+@time f(val,N)
+
+@time g(val,N)
+
+@profview_allocs g(val,N)
+
+@profview_allocs f(val,N)
+
+@profview g(val,N)
+
+@profview g(val,N)
+
+f(x) = get_field_res(+,(x,x),:A)
+
+h(x) = get_field_res(+,(x,x),:B)
+
+function prof_fun(x,sym, N)
+    for i in 1:N
+        get_field_res(+,(x,x),sym)
+    end
+end
+
+@time prof_fun(val, :B, N)
+
+@time f(val)
+@time h(val)
+@time get_field_res(+,(val,val),:A)
 

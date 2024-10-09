@@ -7,7 +7,7 @@ mutable struct DiscreteSimulationVariables{T<:Number, U<:Number, V<:Number, W<:N
     B::Vector{W}
 end
 
-n_scalars(::DiscreteSimulationVariables) =  length(fieldnames(DiscreteSimulationVariables)) - 1
+n_scalars(::DiscreteSimulationVariables{T, U, V, W}) where {T, U, V, W} =  length(fieldnames(DiscreteSimulationVariables{T, U, V, W})) - 1
 
 # Define required AbstractVector methods
 Base.length(dsv::DiscreteSimulationVariables) = n_scalars(dsv) + length(dsv.B)
@@ -39,7 +39,7 @@ end
 
 
 # Implement broadcasting support
-Base.axes(x::DiscreteSimulationVariables) = (Base.OneTo(n_scalars(x)+length(x.B)),)
+# Base.axes(x::DiscreteSimulationVariables) = (Base.OneTo(n_scalars(x)+length(x.B)),)
 Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables}) = Broadcast.Style{DiscreteSimulationVariables}()
 Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables{T, U, V, W}}) where {T, U, V, W} = Broadcast.Style{DiscreteSimulationVariables{T, U, V, W}}()
 Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables{T, U, V, W}}, ::Any) where {T, U, V, W} = Broadcast.Style{DiscreteSimulationVariables{T, U, V, W}}()
@@ -79,20 +79,27 @@ find_simulation_variables(::Tuple{}) = nothing
 find_simulation_variables(x::DiscreteSimulationVariables, rest) = x
 find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 
-unpack_args(x::Any,::Symbol) = x
-unpack_args(::Tuple{}, ::Symbol) = Tuple{}()
+@inline unpack_args(x::Any,::Symbol) = x
+@inline unpack_args(x::DiscreteSimulationVariables,field::Symbol) = getfield(x, field)
+@inline unpack_args(::Tuple{}, ::Symbol) = Tuple{}()
+@inline unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = Broadcast.Broadcasted(x.f,unpack_args(x.args,field))
 # We can assume that we have at least one element
-unpack_args(x::Tuple, field::Symbol) = (unpack_args(x[1], field), unpack_args(Base.tail(x), field)...)
-unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = get_field_res(x.f,x.args, field)
-# This must be a scalar expression in order to be compatible, so there is no harm in materializing right away
-unpack_args(x::Broadcast.Broadcasted, ::Symbol) = Base.materialize(x)
-unpack_args(x::DiscreteSimulationVariables,field::Symbol) = getfield(x, field)
+@inline unpack_args(x::Tuple, field::Symbol) = (unpack_args(x[1], field), unpack_args(Base.tail(x), field)...)
 
-get_field_res(f, args::Tuple, field::Symbol) = copy(Broadcast.Broadcasted(f,unpack_args(args, field)))
+# The constant propagation is appearently important to ensure type stability
+# Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield 
+# This one is for copies and immutable fields
+Base.@constprop :aggressive get_field_res(f, args::Tuple, field::Symbol) = copy(Broadcast.Broadcasted(f,unpack_args(args, field)))
+# This one is for copying to a mutable field
+Base.@constprop :aggressive function copyto_field_res!(dest, f, args::Tuple, field::Symbol)
+    clean_args = unpack_args(args,field)
+    broadcast = Broadcast.Broadcasted(f,clean_args)
+    copyto!(dest, broadcast)
+end 
 
 
 
-function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables{T, U, V, W}}, Axes, F, Args}) where {Axes,F,Args<:Tuple,T, U, V, W}
+@inline function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
     res_args = map(sym -> get_field_res(f,args, sym),(:A,:T,:AT,:B))
@@ -106,14 +113,16 @@ end
 function Base.copyto!(dest::DiscreteSimulationVariables,bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
-    A_res = get_field_res(f,args, :A)
-    T_res = get_field_res(f,args, :T)
-    AT_res = get_field_res(f,args, :AT)
-    B_res = get_field_res(f,args, :B)
-    DiscreteSimulationVariables(A_res,T_res,AT_res,B_res)
+    immutable_syms = (:A,:T,:AT)
+    # Iterating over immutable symbols which cannot be copied to
+    map(immutable_syms) do sym 
+        res = get_field_res(f,args,sym)
+        setfield!(dest, sym, res)
+    end
+    copyto_field_res!(dest.B,f, args, :B)
+    dest
 end
 
-"`x = find_simulation_variables(xs)` returns the first ArrayAndChar among the arguments."
 
 
 # function Base.similar(bc::Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}}, ::Type{ElType}) where ElType
@@ -121,11 +130,3 @@ end
 # end
 
 
-function create_simulation_variables()
-    A = 1.0u"m"   # meters
-    T = 2.0u"s"   # seconds
-    AT = 3.0u"m/s"  # meters per second
-    B = [1.0u"m", 2.0u"m", 3.0u"m"]  # vector of meters
-
-    return DiscreteSimulationVariables(A, T, AT, B)
-end
