@@ -26,7 +26,9 @@ function g(val,N)
     end
 end
 
-N = 1e6
+N = 1e1
+
+g(val,N)
 
 Profile.init()
 

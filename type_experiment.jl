@@ -149,3 +149,6 @@ end
 @time h(val)
 @time get_field_res(+,(val,val),:A)
 
+map(x -> x^2, (5,9,19))
+
+map(x -> x^2, ())
