@@ -13,6 +13,7 @@ val = create_simulation_variables()
 
 val .+= val
 
+val .+ val
 
 function f(val,N)
     for i in 1:N

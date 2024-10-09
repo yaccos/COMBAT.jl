@@ -37,6 +37,12 @@ Cthulhu.@descend broadcast!(+,val,val,val)
 
 Cthulhu.@descend broadcast!(+,val_3, val_2, val_2)
 
+h(x) = begin
+    x = create_simulation_variables()
+    x .+= x
+    x
+end
+
 @time val_3 .= val_2 .+ val_2
 
 @time val_4 = val_2 .+ val_2
@@ -152,3 +158,11 @@ end
 map(x -> x^2, (5,9,19))
 
 map(x -> x^2, ())
+
+function extract_field(x,::Val{T}) where {T}
+    getfield(x,T)
+end
+
+get_val(::Val{T}) where {T} = T
+
+get_val_type(field::Val{T}) where {T} = field

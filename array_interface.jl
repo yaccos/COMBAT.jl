@@ -85,17 +85,18 @@ find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 # 1. Recursing on types by using head-tail concatenation: Same problem
 # 2. Generated functions: Same problem
 # 3. Make a lazy view over the argument tuple: Tuple types cannot be subtyped
-@inline unpack_args(x::Any,::Symbol) = x
-@inline unpack_args(x::DiscreteSimulationVariables,field::Symbol) = getfield(x, field)
-@inline unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = Broadcast.Broadcasted(x.f,unpack_args(x.args,field))
-@inline unpack_args(x::Tuple, field::Symbol) = map(element -> unpack_args(element, field), x)
+@inline unpack_args(x::Any,::Val{Field}) where {Field} = x
+@inline unpack_args(x::DiscreteSimulationVariables,::Val{Field}) where {Field} = getfield(x, Field)
+@inline unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Val{Field}) where {Field} = Broadcast.Broadcasted(x.f,unpack_args(x.args,field))
+@inline unpack_args(x::Tuple, field::Val{Field}) where {Field} = map(element -> unpack_args(element, field), x)
 
 # The constant propagation is appearently important to ensure type stability
 # Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield 
 # This one is for copies and immutable fields
-Base.@constprop :aggressive get_field_res(f, args::Tuple, field::Symbol) = copy(Broadcast.Broadcasted(f,unpack_args(args, field)))
+get_field_res(f, args::Tuple, field::Val{Field}) where {Field} = copy(Broadcast.Broadcasted(f,unpack_args(args, field)))
 # This one is for copying to a mutable field
-Base.@constprop :aggressive function copyto_field_res!(dest, f, args::Tuple, field::Symbol)
+# Base.@constprop :aggressive 
+function copyto_field_res!(dest, f, args::Tuple, field::Val{Field}) where {Field}
     clean_args = unpack_args(args,field)
     broadcast = Broadcast.Broadcasted(f,clean_args)
     copyto!(dest, broadcast)
@@ -106,7 +107,7 @@ end
 @inline function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
-    res_args = map(sym -> get_field_res(f,args, sym),(:A,:T,:AT,:B))
+    res_args = map(sym -> get_field_res(f,args, sym),(Val(:A),Val(:T),Val(:AT),Val(:B)))
     # A_res = get_field_res(f,args, :A)
     # T_res = get_field_res(f,args, :T)
     # AT_res = get_field_res(f,args, :AT)
@@ -117,13 +118,13 @@ end
 function Base.copyto!(dest::DiscreteSimulationVariables,bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
-    immutable_syms = (:A,:T,:AT)
+    immutable_syms = (Val(:A),Val(:T),Val(:AT))
     # Iterating over immutable symbols which cannot be copied to
     map(immutable_syms) do sym 
         res = get_field_res(f,args,sym)
         setfield!(dest, sym, res)
     end
-    copyto_field_res!(dest.B,f, args, :B)
+    copyto_field_res!(dest.B,f, args, Val(:B))
     dest
 end
 
