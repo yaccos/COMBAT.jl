@@ -4,6 +4,8 @@ struct MyType{T} <: AbstractVector{Number}
     val::T
 end
 
+# Only intended for displaying the type
+Base.getindex(x::MyType, idx) = x.val[idx]
 
 Base.BroadcastStyle(::Type{<:MyType}) = Broadcast.Style{MyType}()
 
@@ -19,14 +21,14 @@ Base.size(x::MyType) = (length(x),)
 @inline function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{MyType}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
-    new_val = broadcast(f,unpack_args(args))
+    new_val = broadcast(f,unpack_args(args)...)
     MyType(new_val)
 end
 
 @inline function Base.copyto!(dest::MyType,bc::Broadcast.Broadcasted{Broadcast.Style{MyType}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
-    broadcast!(f,dest.val,unpack_args(args))
+    broadcast!(f, dest.val, unpack_args(args)...)
     dest
 end
 
@@ -34,17 +36,23 @@ x = MyType([1.0, 2.0, 3.0])
 
 function f(val, N)
     for i in 1:N
-        val .+ val
-    end
-end
-
-function g(val, N)
-    for i in 1:N
         val .+= val
     end
 end
 
-N = 1e6
+N = 1e9
 
-@btime g(x, N)
-@btime g(x.val, N)
+@btime f(x, N)
+@btime f(x.val, N)
+
+@code_warntype f(x, N)
+
+@profview f(x, N)
+@profview f(x.val, N)
+
+using Cthulhu
+@descend f(x, N)
+@descend f(x.val, N)
+@descend broadcast!(+,x,x,x)
+
+broadcast!(+,x,x,x)
