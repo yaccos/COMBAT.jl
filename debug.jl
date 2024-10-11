@@ -1,4 +1,5 @@
 include("array_interface.jl")
+using BenchmarkTools
 
 function create_simulation_variables()
     A = 1.0u"m"   # meters
@@ -26,11 +27,13 @@ function g(val,N)
     end
 end
 
-N = 10
+N = 1e6
 
 g(val,N)
 
-@time g(val, N)
+@btime g(val, N)
+
+@profview g(val,N)
 
 Profile.init()
 

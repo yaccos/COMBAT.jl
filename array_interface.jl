@@ -79,13 +79,6 @@ find_simulation_variables(::Tuple{}) = nothing
 find_simulation_variables(x::DiscreteSimulationVariables, rest) = x
 find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 
-# Note: When the arguments of the tuples are of non-bitset types, Julia will allocate a tuples containing these elements
-# instead of optimizing them out as the case is for bitset types. This leads to unacceptable overhead for broadcast lowering
-# with non-bitset types. The following attemts to resolve the problem have unsuccessful:
-# 1. Recursing on types by using head-tail concatenation: Same problem
-# 2. Generated functions: Same problem
-# 3. Make a lazy view over the argument tuple: Tuple types cannot be subtyped
-# 4. Run Julia with flag --optimize=3: No effect
 @inline unpack_args(x::Any,::Symbol) = x
 @inline unpack_args(x::DiscreteSimulationVariables,field::Symbol) = getfield(x, field)
 @inline unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = Broadcast.Broadcasted(x.f,unpack_args(x.args,field))
@@ -98,8 +91,9 @@ Base.@constprop :aggressive get_field_res(f, args::Tuple, field::Symbol) = copy(
 # This one is for copying to a mutable field
 Base.@constprop :aggressive function copyto_field_res!(dest, f, args::Tuple, field::Symbol)
     clean_args = unpack_args(args,field)
-    broadcast = Broadcast.Broadcasted(f,clean_args)
-    copyto!(dest, broadcast)
+    # Using the low-level functions Broadcast.broadcasted or Broadcast.Broadcasted incur considerable
+    # overhead due to some oddities in the Julia compiler 
+    broadcast!(f, dest, clean_args...)
 end 
 
 
