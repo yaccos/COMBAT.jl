@@ -1,5 +1,8 @@
 using Unitful
 
+# If we do not specify this as a subtype of AbstractVector, the Broadcast machinery will try to convert it into
+# a broadcastable representation, but we make this type to be broadcastable as-is due to our customizations of
+# copy and copyto!
 mutable struct DiscreteSimulationVariables{T<:Number, U<:Number, V<:Number, W<:Number} <: AbstractVector{Number}
     A::T
     T::U
@@ -43,7 +46,6 @@ end
 Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables}) = Broadcast.Style{DiscreteSimulationVariables}()
 Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables{T, U, V, W}}) where {T, U, V, W} = Broadcast.Style{DiscreteSimulationVariables{T, U, V, W}}()
 Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables{T, U, V, W}}, ::Any) where {T, U, V, W} = Broadcast.Style{DiscreteSimulationVariables{T, U, V, W}}()
-Broadcast.Style{DiscreteSimulationVariables}()
 Base.BroadcastStyle(::Broadcast.Style{DiscreteSimulationVariables},::Base.Broadcast.BroadcastStyle) = Broadcast.Style{DiscreteSimulationVariables}()
 # Base.BroadcastStyle(::Type{<:DiscreteSimulationVariables}) = Base.Broadcast.DefaultArrayStyle{1}()
 
@@ -81,7 +83,7 @@ find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 
 @inline unpack_args(x::Any,::Symbol) = x
 @inline unpack_args(x::DiscreteSimulationVariables,field::Symbol) = getfield(x, field)
-@inline unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = Broadcast.Broadcasted(x.f,unpack_args(x.args,field))
+@inline unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = Broadcast.broadcasted(x.f,unpack_args(x.args,field)...)
 @inline unpack_args(x::Tuple, field::Symbol) = map(element -> unpack_args(element, field), x)
 
 # The constant propagation is appearently important to ensure type stability
@@ -107,7 +109,7 @@ Base.@constprop :aggressive copyto_field_res!(dest, f, args::Tuple, field::Symbo
     DiscreteSimulationVariables(res_args...)
 end
 
-function Base.copyto!(dest::DiscreteSimulationVariables,bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
+@inline function Base.copyto!(dest::DiscreteSimulationVariables,bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
     immutable_syms = (:A,:T,:AT)

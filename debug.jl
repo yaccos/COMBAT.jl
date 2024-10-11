@@ -28,13 +28,17 @@ function g(val,N)
 end
 
 
-N = 1e9
+N = 1e6
 
 g(val,N)
 
 f(val,N)
 
 @btime g(val, N)
+
+@btime f(val, N)
+
+@btime g(val.B, N)
 
 @btime g(val.B, N)
 
