@@ -1,4 +1,6 @@
+using BenchmarkTools
 include("array_interface.jl")
+
 
 function create_simulation_variables()
     A = 1.0u"m"   # meters
@@ -18,8 +20,9 @@ val .+= val
 
 function f(val,N)
     for i in 1:N
-        val .+ val
+        val = val .+ val
     end
+    val
 end
 
 function g(val,N)
@@ -28,15 +31,17 @@ function g(val,N)
     end
 end
 
-N = 1e10
+N = 1e6
 
 f(val, N)
 
+@profview f(val,N)
+
 g(val,N)
 
-@time f(val, N)
+@btime f(val, N)
 
-@time g(val, N)
+@btime g(val, N)
 
 Profile.init()
 
