@@ -5,7 +5,7 @@ function create_simulation_variables()
     A = 1.0u"m"   # meters
     T = 2.0u"s"   # seconds
     AT = 3.0u"m/s"  # meters per second
-    B = [1.0u"m", 2.0u"m", 3.0u"m"]  # vector of meters
+    B = [1.0, 2.0, 3.0]  # vector of meters
 
     return DiscreteSimulationVariables(A, T, AT, B)
 end
@@ -27,13 +27,33 @@ function g(val,N)
     end
 end
 
-N = 1e6
+
+N = 1e9
 
 g(val,N)
 
+f(val,N)
+
 @btime g(val, N)
 
-@profview g(val,N)
+@btime g(val.B, N)
+
+@profview g(val,N) C=true
+
+using Cthulhu
+using Revise
+
+@descend broadcast!(+,val,val)
+
+using JET
+
+@report_opt g(val, N)
+
+
+
+@btime f(val,N)
+
+@profview f(val,N)
 
 Profile.init()
 

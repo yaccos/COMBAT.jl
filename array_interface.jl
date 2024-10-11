@@ -85,16 +85,14 @@ find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 @inline unpack_args(x::Tuple, field::Symbol) = map(element -> unpack_args(element, field), x)
 
 # The constant propagation is appearently important to ensure type stability
-# Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield 
+# Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield
+
+# Using the low-level functions Broadcast.broadcasted or Broadcast.Broadcasted incur considerable
+# overhead due to some oddities in the Julia compiler when the arg tuple is not a bitset
 # This one is for copies and immutable fields
-Base.@constprop :aggressive get_field_res(f, args::Tuple, field::Symbol) = copy(Broadcast.Broadcasted(f,unpack_args(args, field)))
+Base.@constprop :aggressive get_field_res(f, args::Tuple, field::Symbol) = broadcast(f,unpack_args(args, field)...)
 # This one is for copying to a mutable field
-Base.@constprop :aggressive function copyto_field_res!(dest, f, args::Tuple, field::Symbol)
-    clean_args = unpack_args(args,field)
-    # Using the low-level functions Broadcast.broadcasted or Broadcast.Broadcasted incur considerable
-    # overhead due to some oddities in the Julia compiler 
-    broadcast!(f, dest, clean_args...)
-end 
+Base.@constprop :aggressive copyto_field_res!(dest, f, args::Tuple, field::Symbol) = broadcast!(f, dest, unpack_args(args, field)...)
 
 
 
