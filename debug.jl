@@ -5,7 +5,7 @@ function create_simulation_variables()
     A = 1.0u"m"   # meters
     T = 2.0u"s"   # seconds
     AT = 3.0u"m/s"  # meters per second
-    B = [1.0, 2.0, 3.0]  # vector of meters
+    B = [1.0, 2.0, 3.0]u"m"  # vector of meters
 
     return DiscreteSimulationVariables(A, T, AT, B)
 end

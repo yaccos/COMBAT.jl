@@ -109,16 +109,17 @@ Base.@constprop :aggressive copyto_field_res!(dest, f, args::Tuple, field::Symbo
     DiscreteSimulationVariables(res_args...)
 end
 
-@inline function Base.copyto!(dest::DiscreteSimulationVariables,bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
+@inline Base.@constprop :aggressive function Base.copyto!(dest::DiscreteSimulationVariables,bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
     immutable_syms = (:A,:T,:AT)
     # Iterating over immutable symbols which cannot be copied to
-    map(immutable_syms) do sym 
+    map(immutable_syms) do sym
         res = get_field_res(f,args,sym)
         setfield!(dest, sym, res)
     end
-    copyto_field_res!(dest.B,f, args, :B)
+    dest.B .= f.(unpack_args(args,:B)...)
+    # copyto_field_res!(dest.B,f, args, :B)
     dest
 end
 
