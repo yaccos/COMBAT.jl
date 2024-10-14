@@ -21,14 +21,14 @@ Base.size(x::MyType) = (length(x),)
 @inline function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{MyType}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
-    new_val = broadcast(f,unpack_args(args)...)
+    new_val = f.(unpack_args(args)...)
     MyType(new_val)
 end
 
 @inline function Base.copyto!(dest::MyType,bc::Broadcast.Broadcasted{Broadcast.Style{MyType}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
-    broadcast!(f, dest.val, unpack_args(args)...)
+    dest.val .= f.(unpack_args(args)...)
     dest
 end
 
