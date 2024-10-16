@@ -229,11 +229,21 @@ B[101] = 1e7cell
 B[30] = 1e7cell
 
 function rho_fun(x,p,carrying_coefficient)
-     2*sum(p.f[x:p.n+1,x] .* B[x:p.n+1] .* p.r_x[x:p.n+1]) *
+     2*sum(p.f[x,x:p.n+1] .* B[x:p.n+1] .* p.r_x[x:p.n+1]) *
      carrying_coefficient
 end
 carrying_coefficient = (model_params.C - sum(B)) / model_params.C
-rho_fun(10,model_params,carrying_coefficient)
+rho_fun(20,model_params,carrying_coefficient)
+findlast(model_params.r_x .> zero(model_params.r_x))
+model_params.r_x[30] * B[30] * model_params.f[20,30]
+
+B[30]
+model_params.r_x[30]
+using LinearAlgebra
+@btime model_params.f * B ⋅ model_params.r_x
+
+model_params.f[20,30]
+
 model_params.r_x .* B
 model_params.f[10:model_params.n+1,10]
 model_params.f[begin:end,10]
