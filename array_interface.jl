@@ -118,6 +118,7 @@ end
         res = get_field_res(f,args,sym)
         setfield!(dest, sym, res)
     end
+    # Using copto_field_res incurs an overhead, so this is a fine-tuned (albeit not that generalizable) solution for our case
     dest.B .= f.(unpack_args(args,:B)...)
     # copyto_field_res!(dest.B,f, args, :B)
     dest

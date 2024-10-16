@@ -171,3 +171,79 @@ arr = SizedArray(SA[2.4,3.14,2.71828])
 
 arr_2 = MArray(SA[2.4,3.14,2.71828])
 
+using BenchmarkTools
+
+N = 1e3
+
+@btime sum((x -> x^2).(1:N))
+@btime mapreduce(x -> x^2,+,1:N)
+
+@code_warntype sum((x -> x^2).(1:N))
+
+@code_llvm sum((x -> x^2).(1:N))
+@code_llvm mapreduce(x -> x^2,+,1:N)
+
+d_u0 = similar(u0) ./ 1u"s"
+
+ode_system!(d_u0, u0, model_params, 0u"s")
+
+
+
+B = u0.B
+dB = similar(B) / 1u"s"
+A = u0.A
+function  test_mapreduce(B,d_x,n)
+    mapreduce(x -> d_x[x]*(x-1)*B[x],+,1:n+1)
+end
+
+function test_sum(B,d_x,n)
+    sum((x -> model_params.d_x[x]*(x-1)*B[x]).(1:model_params.n+1))
+end
+
+@btime test_mapreduce(B,model_params.d_x,model_params.n)
+@btime test_sum(B,model_params.d_x,model_params.n)
+
+function dB_test(B,dB,A,p)
+    carrying_coefficient = (p.C - sum(B)) / p.C
+    rho_fun = x -> 2*sum(p.f[x:p.n,x] .* B[x:p.n] .* p.r_x[x:p.n]) * carrying_coefficient
+     dB_fun = x -> binding_coefficient * (n - (x-1) + 1) * A * B[x-1] -
+     p.k_r * (x-1) * B[x] -
+     binding_coefficient * (p.n - (x-1)) * A * B[x] +
+    p.k_r * ((x-1)+1) * B[x + 1] + rho_fun(x) -
+     p.r_x[x]*B[x]*carrying_coefficient-
+     p.d_x[x]*B[x]
+    bB[1] =  -binding_coefficient * p.n * A * B[1] +
+     p.k_r*((1-1)+1)*B[2] +
+      rho_fun(1) -
+      p.r_x[1]*B[1]*carrying_coefficient - p.d_x[1]*B[1]
+    dB[2:p.n] .= dB_fun.(2:p.n)
+    bB[p.n+1] = binding_coefficient*A*B[p.n-1] -
+     p.k_r * p.n * B[p.n] +
+     rho_fun(p.n) -
+     p.r_x[p.n]*B[p.n]*carrying_coefficient - p.d_x[p.n]*B[p.n]
+end
+
+dB_test(B,dB,model_params)
+
+B[101] = 1e7cell
+B[30] = 1e7cell
+
+function rho_fun(x,p,carrying_coefficient)
+     2*sum(p.f[x:p.n+1,x] .* B[x:p.n+1] .* p.r_x[x:p.n+1]) *
+     carrying_coefficient
+end
+carrying_coefficient = (model_params.C - sum(B)) / model_params.C
+rho_fun(10,model_params,carrying_coefficient)
+model_params.r_x .* B
+model_params.f[10:model_params.n+1,10]
+model_params.f[begin:end,10]
+
+test_fun_begin = (x,B) -> B[x]
+
+using SpecialFunctions
+N=Integer(1e2)
+e_mapreduce(x,N) = mapfoldr(n -> x^n/factorial(big(n)),+,0:N)
+e_broadcast(x,N) = sum(x.^(0:N)./ factorial.(big.(0:N)))
+@btime e_mapreduce(10,N)
+@btime e_broadcast(10,N)
+@btime exp(10)
