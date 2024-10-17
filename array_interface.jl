@@ -51,7 +51,12 @@ Base.BroadcastStyle(::Broadcast.Style{DiscreteSimulationVariables},::Base.Broadc
 
 
 function Base.similar(x::DiscreteSimulationVariables{T, U, V, W}) where {T, U, V, W}
-    DiscreteSimulationVariables(T(0),U(0),V(0),similar(Array{W}, axes(x.B)))
+    DiscreteSimulationVariables(zero(T),zero(U),zero(V),similar(Array{W}, axes(x.B)))
+end
+
+function Base.zero(x::DiscreteSimulationVariables{T, U, V, W}) where {T, U, V, W}
+    zero_structures = map(sym -> zero(getfield(x,sym)),(:A,:T,:AT,:B))
+    DiscreteSimulationVariables(zero_structures...)
 end
 
 function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}})

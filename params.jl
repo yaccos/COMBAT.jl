@@ -3,7 +3,7 @@ using Distributions
 
 n_targets = 100
 starting_population = 1e6cell
-treatment_length = 86400u"s" # 
+treatment_length = 86400.0u"s" # 
 # initial_antibiotic_level = 1e6/cell
 initial_antibiotic_level = 1u"mg/L"
 maximum_kill_rate = 0.001u"1/s"

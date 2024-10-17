@@ -81,4 +81,6 @@ end
 
 problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_span),model_params)
 
+# solve(problem,AutoTsit5(Rosenbrock23()))
+solve(problem,RK4())
 

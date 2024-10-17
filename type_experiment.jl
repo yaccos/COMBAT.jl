@@ -183,9 +183,6 @@ N = 1e3
 @code_llvm sum((x -> x^2).(1:N))
 @code_llvm mapreduce(x -> x^2,+,1:N)
 
-d_u0 = similar(u0) ./ 1u"s"
-
-ode_system!(d_u0, u0, model_params, 0u"s")
 
 
 
@@ -257,3 +254,12 @@ e_broadcast(x,N) = sum(x.^(0:N)./ factorial.(big.(0:N)))
 @btime e_mapreduce(10,N)
 @btime e_broadcast(10,N)
 @btime exp(10)
+
+include("core_model.jl")
+d_u0 = similar(u0) ./ 1u"s"
+
+ode_system!(d_u0, u0, model_params, 0u"s")
+
+@code_warntype ode_system!(d_u0, u0, model_params, 0u"s")
+using Cthulhu
+@descend ode_system!(d_u0, u0, model_params, 0u"s")
