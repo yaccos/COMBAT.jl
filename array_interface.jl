@@ -131,10 +131,13 @@ find_simulation_variables(::Tuple{}) = nothing
 find_simulation_variables(x::DiscreteSimulationVariables, rest) = x
 find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 
-@inline unpack_args(x::Any,::Symbol) = x
-@inline unpack_args(x::DiscreteSimulationVariables,field::Symbol) = getfield(x, field)
-@inline unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = Broadcast.broadcasted(x.f,unpack_args(x.args,field)...)
-@inline unpack_args(x::Tuple, field::Symbol) = map(element -> unpack_args(element, field), x)
+
+# Using generated functions here really helps performance
+@generated unpack_args(x::Any,::Symbol) = :(x)
+@generated unpack_args(x::DiscreteSimulationVariables,field::Symbol) = :(getfield(x, field))
+@generated unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}}, field::Symbol) = :(Broadcast.broadcasted(x.f,unpack_args(x.args,field)...))
+@generated unpack_args(::Tuple{}, ::Symbol) = :()
+@generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
 
 # The constant propagation is appearently important to ensure type stability
 # Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield
