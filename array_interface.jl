@@ -188,6 +188,7 @@ end
     dest
 end
 
+
 # Adopted from https://scientificcoder.com/user-defined-show-method-in-julia
 
 function Base.show(io::IO, obj::DiscreteSimulationVariables)

@@ -18,7 +18,12 @@ end
 
 u0 = initialize_system(model_params)
 
+abstol_struct = similar(u0)
 
+abstol_struct.A = abstol*oneunit(abstol_struct.A)
+abstol_struct.T = abstol*oneunit(abstol_struct.T)
+abstol_struct.AT = abstol*oneunit(abstol_struct.AT)
+fill!(abstol_struct.B,abstol*oneunit(eltype(abstol_struct.B)))
 
 function ode_system!(du, u, p, t)
     
@@ -82,8 +87,8 @@ end
 problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_span),model_params)
 
 # sol = solve(problem,AutoTsit5(Rosenbrock23()))
-solve(problem,RK4())
-@profview solve(problem,RK4())
+solve(problem,RK4();abstol=abstol_struct)
+@profview solve(problem,RK4();abstol=abstol_struct)
 
 using Cthulhu
 @descend solve(problem,RK4())

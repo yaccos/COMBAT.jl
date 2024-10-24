@@ -1,11 +1,16 @@
 using Distributions
 using LinearAlgebra
+include("array_interface.jl")
 
 @refunit cell "cell" Cells Unitful.𝐍 false
 
 n_targets = 100
 starting_population = 1e6cell
-treatment_length = 86400.0u"s" # 
+treatment_length = 86400.0u"s" #
+# We do not need any better accuracy than 0.01
+abstol = 1e-2
+
+
 # initial_antibiotic_level = 1e6/cell
 initial_antibiotic_level = 1u"mg/L"
 maximum_kill_rate = 0.001u"1/s"
