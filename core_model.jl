@@ -37,15 +37,15 @@ function ode_system!(du, u, p, t)
     index_end = lastindex(B)
     carrying_coefficient = (p.C - sum(B)) / p.C
     binding_coefficient = p.k_f/(p.V*p.N_A)
+    rho_fun = p.rho_cache
     # Translates between the B array indicies and the number of antibiotic molecules bound in each compartment
     # This is an abstraction intended to avoid off-by-one index errors and support both one and zero indexed versions
     # of arrays
     @inline bound_target_number = x -> x - index_start
     @inline free_target_number = x -> p.n - (x - index_start)
 
-    
+    mul!(rho_fun, p.f_scaled, B)
     # Compartment-wise rates 
-    @inline rho_fun = i -> 2*mapreduce(j -> p.f_scaled[j, i] * B[j], +, i:index_end) * carrying_coefficient
     @inline binding_rate = x -> binding_coefficient * free_target_number(x) * A * B[x]
     @inline unbinding_rate = x -> p.k_r * bound_target_number(x) * B[x]
     @inline division_rate = x -> p.r_x[x]*B[x]*carrying_coefficient
@@ -55,15 +55,15 @@ function ode_system!(du, u, p, t)
     
     
     dB_fun = x -> binding_rate(x-1) - unbinding_rate(x) - binding_rate(x) + unbinding_rate(x+1) +
-     rho_fun(x) - division_rate(x)- death_rate(x)
+     rho_fun[x] - division_rate(x)- death_rate(x)
     # For the beginning and end of the B array, we must have custom assignment in order to avoid
     # index out of bounds errors
     dB[begin] =  -binding_rate(index_start) + unbinding_rate(index_start+1) +
-      rho_fun(index_start) - division_rate(index_start) - death_rate(index_start)
+      rho_fun[index_start] - division_rate(index_start) - death_rate(index_start)
     dB[begin+1:end-1] .= dB_fun.(index_start+1:index_end-1)
     dB[end] = binding_rate(index_end-1) -
      unbinding_rate(index_end) +
-     rho_fun(index_end) -
+     rho_fun[index_end] -
      division_rate(index_end) - death_rate(index_end)
     # mapreduce is far more efficient than a broadcasted call over the array followed by a sum operation
     # This approach makes sure there are no or minimal allocations, considerably reducing overhead
