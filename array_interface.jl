@@ -99,6 +99,10 @@ function Base.similar(x::DiscreteSimulationVariables{T, U, V, W, Z}) where {T, U
     DiscreteSimulationVariables(zero(U),zero(V),zero(W),similar(Array{Z}, axes(x.B)))
 end
 
+function Base.similar(x::DiscreteSimulationVariables, ::Type{T}) where {T}
+    DiscreteSimulationVariables(zero(T),zero(T),zero(T),similar(Array{T}, axes(x.B)))
+end
+
 function Base.zero(x::DiscreteSimulationVariables{T, U, V, W, Z}) where {T, U, V, W, Z}
     zero_structures = map(sym -> zero(getfield(x,sym)),(:A,:T,:AT,:B))
     DiscreteSimulationVariables(zero_structures...)

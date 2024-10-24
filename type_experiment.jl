@@ -263,3 +263,20 @@ ode_system!(d_u0, u0, model_params, 0u"s")
 @code_warntype ode_system!(d_u0, u0, model_params, 0u"s")
 using Cthulhu
 @descend ode_system!(d_u0, u0, model_params, 0u"s")
+
+u0
+
+atmp = similar(u0,Float64)
+@descend broadcast!(atmp, x -> DiffEqBase.ODE_DEFAULT_NORM(x,0.0) .* 2, u0)
+
+
+atmp .= DiffEqBase.ODE_DEFAULT_NORM.(u0,0.0) .* 2
+
+r0 = [1131.340, -2282.343, 6672.423]u"km"
+v0 = [-5.64305, 4.30333, 2.42879]u"km/s"
+Δt = 86400.0*365u"s"
+μ = 398600.4418u"km^3/s^2"
+rv0 = ArrayPartition(r0,v0)
+atmp = similar(rv0,Float64)
+@code_warntype broadcast!(atmp, x -> DiffEqBase.ODE_DEFAULT_NORM(x,0.0) .* 2, rv0)
+@descend broadcast!(atmp, x -> DiffEqBase.ODE_DEFAULT_NORM(x,0.0) .* 2, rv0)

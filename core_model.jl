@@ -83,3 +83,6 @@ problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_sp
 
 # sol = solve(problem,AutoTsit5(Rosenbrock23()))
 @profview solve(problem,RK4())
+
+using Cthulhu
+@descend solve(problem,RK4())
