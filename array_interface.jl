@@ -149,9 +149,9 @@ find_simulation_variables(::Any, rest) = find_simulation_variables(rest)
 # Using the low-level functions Broadcast.broadcasted or Broadcast.Broadcasted incur considerable
 # overhead due to some oddities in the Julia compiler when the arg tuple is not a bitset
 # This one is for copies and immutable fields
-Base.@constprop :aggressive get_field_res(f, args::Tuple, field::Symbol) = broadcast(f,unpack_args(args, field)...)
+@generated get_field_res(f, args::Tuple, field::Symbol) = :(broadcast(f,unpack_args(args, field)...))
 # This one is for copying to a mutable field
-Base.@constprop :aggressive copyto_field_res!(dest, f, args::Tuple, field::Symbol) = broadcast!(f, dest, unpack_args(args, field)...)
+@generated copyto_field_res!(dest, f, args::Tuple, field::Symbol) = :(broadcast!(f, dest, unpack_args(args, field)...))
 
 
 
@@ -169,12 +169,19 @@ end
 @inline Base.@constprop :aggressive function Base.copyto!(dest::DiscreteSimulationVariables,bc::Broadcast.Broadcasted{Broadcast.Style{DiscreteSimulationVariables}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
+    
     immutable_syms = (:A,:T,:AT)
-    # Iterating over immutable symbols which cannot be copied to
-    map(immutable_syms) do sym
-        res = get_field_res(f,args,sym)
-        setfield!(dest, sym, res)
+
+    # Using value types to specialize map_fun is indeed an ugly solution
+    # Constant propagation should **usually** make this unnecessary, but
+    # benchmarking has shown there are cases where this does not happen (even with aggressive const propagation),
+    # causing type unstability and costly runtime dispatch
+    function map_fun(::Val{sym}) where {sym}
+        setfield!(dest, sym, f.(unpack_args(args,sym)...))
     end
+
+    map(map_fun, Val.(immutable_syms))
+
     # Using copto_field_res incurs an overhead, so this is a fine-tuned (albeit not that generalizable) solution for our case
     dest.B .= f.(unpack_args(args,:B)...)
     # copyto_field_res!(dest.B,f, args, :B)
