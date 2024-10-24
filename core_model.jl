@@ -45,7 +45,7 @@ function ode_system!(du, u, p, t)
 
     
     # Compartment-wise rates 
-    @inline rho_fun = i -> 2*mapreduce(j -> p.f[i,j] * B[j] * p.r_x[j], +, i:index_end) * carrying_coefficient
+    @inline rho_fun = i -> 2*mapreduce(j -> p.f_scaled[j, i] * B[j], +, i:index_end) * carrying_coefficient
     @inline binding_rate = x -> binding_coefficient * free_target_number(x) * A * B[x]
     @inline unbinding_rate = x -> p.k_r * bound_target_number(x) * B[x]
     @inline division_rate = x -> p.r_x[x]*B[x]*carrying_coefficient

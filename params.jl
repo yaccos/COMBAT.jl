@@ -1,4 +1,6 @@
 using Distributions
+using LinearAlgebra
+
 @refunit cell "cell" Cells Unitful.𝐍 false
 
 n_targets = 100
@@ -30,6 +32,11 @@ d_x = d_fun.(0:n_targets)
 
 hypergeom_density_fun = (i,x) -> pdf(Hypergeometric(x,2*n_targets - x, n_targets),i)
 hypergeom_density_mat = hypergeom_density_fun.(0:n_targets,(0:n_targets)')
+
+# The reason we transpose the scaled matrix is the fact that Julia stores matrices in column-major order
+# and in the ODE function, we want this quick access
+# NOTE: transpose() is by default a lazy operation and hence would not help us much unless we forced eager evaluation 
+scaled_hypergeom_density_mat = copy(transpose(diagm(r_x) * hypergeom_density_mat))
 function hypergeom_density(i,x)
     binomial(x, i) * binomial(2*n_targets-x, n_targets-i)/ binomial(2*n_targets, n_targets)
 end
@@ -40,6 +47,7 @@ A_n_molecules = uconvert(NoUnits, initial_antibiotic_level / molecular_weight * 
 
 model_params = (n=n_targets,B_0=starting_population,t_span=treatment_length,A=A_n_molecules,
 D_0=maximum_kill_rate,r_T=replication_threshold,k_f=binding_rate,k_r=unbinding_rate,
-W=molecular_weight,V=total_volume,C=carrying_capacity,k_T=killing_threshold,N_A=N_A,f=hypergeom_density_mat,
+W=molecular_weight,V=total_volume,C=carrying_capacity,k_T=killing_threshold,N_A=N_A,
+f=hypergeom_density_mat, f_scaled=scaled_hypergeom_density_mat,
 d_x = d_x, r_x=r_x
 )
