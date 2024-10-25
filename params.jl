@@ -38,8 +38,8 @@ d_x = d_fun.(0:n_targets)
 hypergeom_density_fun = (i,x) -> pdf(Hypergeometric(x,2*n_targets - x, n_targets),i)
 hypergeom_density_mat = hypergeom_density_fun.(0:n_targets,(0:n_targets)')
 
-
-scaled_hypergeom_density_mat = diagm(r_x) * hypergeom_density_mat
+# Scale each column with the growth rate 
+scaled_hypergeom_density_mat = hypergeom_density_mat * diagm(r_x)
 function hypergeom_density(i,x)
     binomial(x, i) * binomial(2*n_targets-x, n_targets-i)/ binomial(2*n_targets, n_targets)
 end
