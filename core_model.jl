@@ -61,8 +61,8 @@ function ode_system!(du, u, p, t)
      division_rate(x)- death_rate(x)
     # For the beginning and end of the B array, we must have custom assignment in order to avoid
     # index-out-of-bounds errors
-    dB[begin] =  -binding_rate(index_start) + unbinding_rate(index_start+1) 
-    - division_rate(index_start) - death_rate(index_start)
+    dB[begin] =  -binding_rate(index_start) + unbinding_rate(index_start+1) -
+     division_rate(index_start) - death_rate(index_start)
     dB[begin+1:end-1] .= dB_fun.(index_start+1:index_end-1)
     dB[end] = binding_rate(index_end-1) -
      unbinding_rate(index_end) -
@@ -87,6 +87,8 @@ function ode_system!(du, u, p, t)
     p.k_r * (AT +  bound_targets)
     du.T = -binding_coefficient * A*T + p.k_r * AT + free_targets_released
     du.AT = binding_coefficient * A*T - p.k_r * AT + bound_targets_released
+    
+    du
 end
 
 problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_span),model_params)

@@ -25,8 +25,8 @@ intracellular_volume = 1e-15u"L"/cell
 unbinding_rate = 0.01u"1/s"
 carrying_capacity = 1e9cell
 molecular_weight = 555.5u"g/mol"
-binding_rate = 1u"L/mol/s"
-# binding_rate = 1000u"L/mol/s"
+# binding_rate = 1u"L/mol/s"
+binding_rate = 1000u"L/mol/s"
 N_A = AvogadroConstant
 binding_coefficient = binding_rate / (total_volume * N_A)
 
