@@ -73,7 +73,7 @@ function ode_system!(du, u, p, t)
     # The B vector and the carrying coefficient cannot be precomputed, so
     # we have to multiply with these inside the ODE function
     #Computes the rho function for each of the components and add it to the answer
-    mul!(dB, p.f_scaled, B, 2*carrying_coefficient, one(eltype(dB)))
+    mul!(dB, p.f_scaled, B, carrying_coefficient, one(eltype(dB)))
 
     # mapreduce is far more efficient than a broadcasted call over the array followed by a sum operation
     # This approach makes sure there are no or minimal allocations, considerably reducing overhead
