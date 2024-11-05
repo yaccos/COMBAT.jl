@@ -30,7 +30,18 @@ where the symbols mean the following:
 | $r_x$  | Function of model variables | Replication rate of bacteria with $x$ bound targets|
 | $d_x$  | Function of model variables | Death rate of bacteria with $x$ bound targets|
 | $f_{i,x}$  | Function of model variables | Hypergeometric distribution function|
+
+Unless states otherwise, we will only consider the original model which does not have any input file and $A$ will therefore vary according to these equations.
+
+For initializing the system, the vCOMBAT C implementation (after some modifications) accepts the following parameters with the corresponding units of measurements:
+
+| Symbol in paper | Command line option| Meaning | Unit | Default value |
+|:---------- |:---------- | ---------- | ---------- |:------------:|
+| $A$    | `-d`| Staring antibiotic concentration | mg/L| 10000|
+| $B_0$    | `-p`| Initial bacterial population | Cells | $10^6$|
+
 """
+
 
 # ╔═╡ 4dd3d9bb-d821-4c40-b243-8ebb5b0955ba
 
