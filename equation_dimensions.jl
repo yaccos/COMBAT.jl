@@ -48,12 +48,15 @@ For initializing the system, the vCOMBAT C implementation (after some modificati
 |:---------- |:---------- | ---------- | ---------- |:------------:|
 | $A$    | `-d`| Staring antibiotic concentration | mg/L| $10000$|
 | $B_0$    | `-p`| Initial bacterial population | Cells | $10^6$|
-| (Missing)    | `-t`| [total time]:[time between timepoints] | s | $360000:3600$|
+| (Missing)    | `-t`| [total time]:[time between timepoints] | s | $360000:3600$ ($100$ hours with $1$ hour steps)|
 | $n$    | `-n`| Number of target molecules | Molecules | $100$|
 | $r_T$    | `-r`| Replication threshold | | $\frac{n}{2}$|
 | $R_0$    | `-R`| Maximum replication rate | 1/s | $8.34 \cdot 10^{-6}$|
-| $k_T0$    | `-k`| Killing threshold |  | $\frac{n}{2}$|
-| $k_T0$    | `-k`| Killing threshold |  | $\frac{n}{2}$|
+| $k_T$    | `-k`| Killing threshold |  | $\frac{n}{2}$|
+| $D_0$    | `-K`| Maxium death rate | 1/s | $1.39\cdot 10^{-5}$|
+| $D_0$    | `-K`| Maxium death rate | 1/s | $1.39\cdot 10^{-5}$|
+| (Missing)    | `-M`| Molecular weight of drug | g/mol | $555.5$|
+| $C$    | `-C`| Carrying capacity | Cells | $10^9$|
 
 Furthermore the paper and C implementations operate with the replication and killing rates as:
 
