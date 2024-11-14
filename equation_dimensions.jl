@@ -19,7 +19,11 @@ md"""
 
 The equation of the COMBAT model as presented by Tran *et al.* (2022) are the following:
 
-$$\begin{aligned} \frac{\text {d}B_x}{dt}& = \frac{k_{f}}{Vn_{A}}(n-x+1)AB_{x-1} - k_{r}xB_x - \frac{k_{f}}{Vn_{A}}(n-x)AB_x \\&\quad + k_{r}(x+1)B_{x+1} + \rho _x -r_xB_x \frac{C-\sum _{j=0}^{n}B_j}{C} -d_xB_x \\ \frac{\text {d}A}{dt} &= - \frac{k_{f}}{Vn_{A}}(A\cdot T +\sum _{x=0}^{n-1}(n-x)AB_x) + k_{r}\left(A_T+\sum _{x=1}^{n}xB_x\right) \\ \frac{\text {d}T}{dt} &= - \frac{k_{f}}{Vn_{A}}A\cdot T + k_{r}A_T + \sum _{x=0}^{n}d_x(n-x)B_x \\ \frac{\text {d}A_T}{dt} &= \frac{k_{f}}{Vn_{A}}A\cdot T - k_{r}A_T + \sum _{x=0}^{n}d_xxB_x \\ \rho _x &= 2\sum _{i=x}^{n}f_{i,x}r_i B_i \frac{C-\sum _{j=0}^{n}B_j}{C}, \end{aligned}$$
+$$\begin{aligned} \frac{\text {d}B_x}{\mathrm{d}t}& = \frac{k_{f}}{Vn_{A}}(n-x+1)AB_{x-1} - k_{r}xB_x - \frac{k_{f}}{Vn_{A}}(n-x)AB_x \\&\quad + k_{r}(x+1)B_{x+1} + \rho _x -r_xB_x \frac{C-\sum _{j=0}^{n}B_j}{C} -d_xB_x 
+\\ \frac{\text {d}A}{\mathrm{d}t} &= - \frac{k_{f}}{Vn_{A}}(A\cdot T +\sum _{x=0}^{n-1}(n-x)AB_x) + k_{r}\left(A_T+\sum _{x=1}^{n}xB_x\right) 
+\\ \frac{\text {d}T}{\mathrm{d}t} &= - \frac{k_{f}}{Vn_{A}}A\cdot T + k_{r}A_T + \sum _{x=0}^{n}d_x(n-x)B_x 
+\\ \frac{\text {d}A_T}{\mathrm{d}t} &= \frac{k_{f}}{Vn_{A}}A\cdot T - k_{r}A_T + \sum _{x=0}^{n}d_xxB_x 
+\\ \rho_x &= 2\sum _{i=x}^{n}f_{i,x}r_i B_i \frac{C-\sum _{j=0}^{n}B_j}{C}, \end{aligned}$$
 
 where the symbols mean the following:
 
@@ -30,7 +34,7 @@ where the symbols mean the following:
 | $k_f$  | Parameter | Binding rate of antibiotic to target |
 | $k_r$  | Parameter | Unbinding rate of antibiotic to target |
 | $V$  | Parameter | Average intracellular volume |
-| $n_A$  | Constant | Avodargo number ($\approx 6\cdot 10^{23} \;\mathrm{mol}^{-1}$)|
+| $n_A$  | Constant | Avogadro number ($\approx 6\cdot 10^{23} \;\mathrm{mol}^{-1}$)|
 | $C$  | Parameter | Carrying capacity|
 | $A$  | Model variable | Drug concentration|
 | $T$  | Model variable | Concentration of extracellular free targets|
@@ -46,16 +50,18 @@ For initializing the system, the vCOMBAT C implementation (after some modificati
 
 | Symbol in paper | Command line option| Meaning | Unit | Default value |
 |:---------- |:---------- | ---------- | ---------- |:------------:|
-| $A$    | `-d`| Staring antibiotic concentration | mg/L| $10000$|
+| $A$    | `-d`| Initial antibiotic concentration | mg/L| $10000$|
+| $k_f$    | `-A`| Binding rate of antibiotic to target | L/mol/s| $4450$|
+| $k_r$    | `-D`| Dissociation rate of antibiotic from target | 1/s| $0.0023$|
 | $B_0$    | `-p`| Initial bacterial population | Cells | $10^6$|
 | (Missing)    | `-t`| [total time]:[time between timepoints] | s | $360000:3600$ ($100$ hours with $1$ hour steps)|
 | $n$    | `-n`| Number of target molecules | Molecules | $100$|
 | $r_T$    | `-r`| Replication threshold | | $\frac{n}{2}$|
 | $R_0$    | `-R`| Maximum replication rate | 1/s | $8.34 \cdot 10^{-6}$|
 | $k_T$    | `-k`| Killing threshold |  | $\frac{n}{2}$|
+| $V$    | `-V`| Intracellular volume | L/Cell | $10^{-15}$|
 | $D_0$    | `-K`| Maxium death rate | 1/s | $1.39\cdot 10^{-5}$|
-| $D_0$    | `-K`| Maxium death rate | 1/s | $1.39\cdot 10^{-5}$|
-| (Missing)    | `-M`| Molecular weight of drug | g/mol | $555.5$|
+| W    | `-M`| Molecular weight of drug | g/mol | $555.5$|
 | $C$    | `-C`| Carrying capacity | Cells | $10^9$|
 
 Furthermore the paper and C implementations operate with the replication and killing rates as:
@@ -69,10 +75,46 @@ This is, the graphs look something like this:
 """
 
 
+# ╔═╡ 9810896b-8b08-4d69-af63-4b4e5cde9f30
+
+
 # ╔═╡ a4e248f1-dc9a-475d-b72a-f3c12198b580
 load("replication_killing_rates.png")
 
 # ╔═╡ 6fb53591-d97f-429c-b879-3b7030e65719
+md"""
+Internally, the vCOMBAT implementation converts the drug concentration measured in mass per volume to the number of drug molecules per cell before the simulation is run:
+$$A_{\text{Molecular}}=\frac{A_{\text{Macroscopic}}\cdot V\cdot n_A}{W}$$
+We verify that this actually yields the number of molecules per cell by checking the units:
+$$\left[A_{\text{Molecular}}\right]=\left[\frac{A_{\text{Macroscopic}}\cdot V\cdot n_A}{W}\right]=\frac{\left[A_{\text{Macroscopic}}\right]\cdot \left[V\right]\cdot \left[n_A\right]}{\left[W\right]}=\frac{\frac{\mathrm{g}}{\mathrm{L}}\cdot \frac{\mathrm{L}}{\mathrm{Cell}}\cdot \frac{1}{\text{mol}}}{\frac{\text{g}}{\text{mol}}}=\frac{1}{\mathrm{Cell}},$$
+which is exactly as intended.
+
+We next go through the equations in the COMBAT model: Since the measurement unit of $B_x$ is $\left[B_x\right]=\mathrm{Cells}$, the measurement unit of $\frac{\text {d}B_x}{\mathrm{d}t}$ is $\left[\frac{\text {d}B_x}{\mathrm{d}t}\right]=\frac{\left[B_x\right]}{\left[t\right]}=\frac{\mathrm{Cell}}{s}$. We now prepare to check whether the right side of this equation conforms with these dimensions. First, we assert that the quantity $\frac{C-\sum\limits _{j=0}^{n}B_j}{C}$ is dimensionless:
+$$\left[\frac{C-\sum\limits_{j=0}^{n}B_j}{C}\right]=\frac{\left[C\right]-\left[\sum\limits_{j=0}^{n}B_j\right]}{\left[C\right]}=\frac{\mathrm{Cell}-\sum\limits_{j=0}^{n}\left[B_j\right]}{\mathrm{Cell}}=\frac{\mathrm{Cell}-\sum\limits_{j=0}^{n}\mathrm{Cell}}{\mathrm{Cell}}=\frac{\mathrm{Cell}}{\mathrm{Cell}}=1$$
+
+Next, we find the measurement unit of $\rho_x$:
+
+$$\begin{aligned}
+\left[\rho_x\right]
+=\left[2\right]\left[\sum\limits_{i=x}^{n}f_{i,x}r_i B_i \frac{C-\sum\limits _{j=0}^{n}B_j}{C}\right]=
+1\cdot\sum\limits_{i=x}^{n}\left[f_{i,x}\right] \left[r_i\right] \left[B_i\right] \left[\frac{C-\sum\limits _{j=0}^{n}B_j}{C}\right]=\\
+\sum\limits_{i=x}^{n}1\cdot \frac{1}{\mathrm{s}}\cdot\mathrm{Cell} \cdot 1=\sum\limits_{i=x}^{n}\frac{\mathrm{Cell}}{\mathrm{s}}=\frac{\mathrm{Cell}}{\mathrm{s}}
+\end{aligned}$$
+
+From this, we can proceed with the full expression for $\frac{\text {d}B_x}{\mathrm{d}t}$:
+
+$$\begin{aligned}
+\left[\frac{k_{f}}{Vn_{A}}(n-x+1)AB_{x-1} - k_{r}xB_x - \frac{k_{f}}{Vn_{A}}(n-x)AB_x + \right. \\ \left. \quad k_{r}(x+1)B_{x+1} + \rho _x -r_xB_x \frac{C-\sum _{j=0}^{n}B_j}{C} -d_xB_x\right] = \\
+\left[\frac{k_{f}}{Vn_{A}}(n-x+1)AB_{x-1}\right] - \left[k_{r}xB_x\right] - \left[\frac{k_{f}}{Vn_{A}}(n-x)AB_x\right] + \\ \quad \left[k_{r}(x+1)B_{x+1}\right] + \left[\rho_x\right] - \left[r_xB_x \frac{C-\sum _{j=0}^{n}B_j}{C}\right] -\left[d_xB_x\right] = \\
+\frac{\left[k_{f}\right]}{\left[V\right]\left[n_{A}\right]}\left[n-x+1\right]\left[A\right]\left[B_{x-1}\right] - \left[k_{r}\right]\left[x\right]\left[B_x\right] - \frac{\left[k_{f}\right]}{\left[V\right]\left[n_{A}\right]}\left[n-x\right]\left[A\right]\left[B_{x}\right] + \\ \quad \left[k_{r}\right]\left[x+1\right]\left[B_{x+1}\right] + \left[\rho_x\right] - \left[r_x\right]\left[B_x\right] \left[\frac{C-\sum _{j=0}^{n}B_j}{C}\right] -\left[d_x\right]\left[B_x\right] = \\
+\frac{\frac{\mathrm{L}}{\mathrm{mol}\cdot \mathrm{s}}}{\frac{\mathrm{L}}{\mathrm{Cell}}\cdot{\frac{\mathrm{1}}{\mathrm{mol}}}}\cdot 1\cdot\frac{1}{\mathrm{Cell}}\cdot{\mathrm{Cell}} - \left[k_{r}\right]\left[x\right]\left[B_x\right] - \frac{\frac{\mathrm{L}}{\mathrm{mol}\cdot \mathrm{s}}}{\frac{\mathrm{L}}{\mathrm{Cell}}\cdot{\frac{\mathrm{1}}{\mathrm{mol}}}}\cdot 1\cdot\frac{1}{\mathrm{Cell}}\cdot{\mathrm{Cell}} + \\ \quad \left[k_{r}\right]\left[x+1\right]\left[B_{x+1}\right] + \left[\rho_x\right] - \left[r_x\right]\left[B_x\right] \left[\frac{C-\sum _{j=0}^{n}B_j}{C}\right] -\left[d_x\right]\left[B_x\right]
+\end{aligned}$$
+"""
+
+# ╔═╡ 46f15089-a99c-41ed-8376-644e0c9331ac
+
+
+# ╔═╡ 6c4957cb-182f-406e-9ac1-96cc53f37780
 
 
 # ╔═╡ 35fedd69-da27-4490-b5c3-8f75348504c4
@@ -1973,8 +2015,11 @@ version = "1.4.1+1"
 # ╠═0c510bda-1aa8-4920-9781-0e1962abc32c
 # ╠═bc91be1f-92f3-4ed7-8038-33a1e41012d1
 # ╠═53a4d7b0-9aa8-11ef-2a21-01318b24dbbe
+# ╠═9810896b-8b08-4d69-af63-4b4e5cde9f30
 # ╟─a4e248f1-dc9a-475d-b72a-f3c12198b580
 # ╠═6fb53591-d97f-429c-b879-3b7030e65719
+# ╠═46f15089-a99c-41ed-8376-644e0c9331ac
+# ╠═6c4957cb-182f-406e-9ac1-96cc53f37780
 # ╠═35fedd69-da27-4490-b5c3-8f75348504c4
 # ╠═59081412-d382-4147-9d52-ce3d32fe006e
 # ╠═c0462c6d-9c65-4f4b-8ba4-bde4b3df5a11
