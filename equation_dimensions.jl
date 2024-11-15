@@ -17,15 +17,16 @@ using Images
 md"""
 # _Report on the properties of the COMBAT model_
 
-The equation of the COMBAT model as presented by Tran *et al.* (2022) are the following:
+## The equations and their symbols
+The equations of the COMBAT model as presented by Tran *et al.* (2022) are the following:
 
 $$\begin{aligned} \frac{\text {d}B_x}{\mathrm{d}t}& = \frac{k_{f}}{Vn_{A}}(n-x+1)AB_{x-1} - k_{r}xB_x - \frac{k_{f}}{Vn_{A}}(n-x)AB_x \\&\quad + k_{r}(x+1)B_{x+1} + \rho _x -r_xB_x \frac{C-\sum _{j=0}^{n}B_j}{C} -d_xB_x 
-\\ \frac{\text {d}A}{\mathrm{d}t} &= - \frac{k_{f}}{Vn_{A}}(A\cdot T +\sum _{x=0}^{n-1}(n-x)AB_x) + k_{r}\left(A_T+\sum _{x=1}^{n}xB_x\right) 
+\\ \frac{\text {d}A}{\mathrm{d}t} &= - \frac{k_{f}}{Vn_{A}}\left(A\cdot T +\sum _{x=0}^{n-1}(n-x)AB_x\right) + k_{r}\left(A_T+\sum _{x=1}^{n}xB_x\right) 
 \\ \frac{\text {d}T}{\mathrm{d}t} &= - \frac{k_{f}}{Vn_{A}}A\cdot T + k_{r}A_T + \sum _{x=0}^{n}d_x(n-x)B_x 
 \\ \frac{\text {d}A_T}{\mathrm{d}t} &= \frac{k_{f}}{Vn_{A}}A\cdot T - k_{r}A_T + \sum _{x=0}^{n}d_xxB_x 
-\\ \rho_x &= 2\sum _{i=x}^{n}f_{i,x}r_i B_i \frac{C-\sum _{j=0}^{n}B_j}{C}, \end{aligned}$$
+\\ \rho_x &= 2\sum _{i=x}^{n}f_{i,x}r_i B_i \frac{C-\sum _{j=0}^{n}B_j}{C}. \end{aligned}$$
 
-where the symbols mean the following:
+Since $x$ varies from $0$ to $n$ inclusive, these equations constitute a system of of $n+4$ variables where the symbols mean the following:
 
 | Symbol | Type | Meaning |
 |:---------- | ---------- |:------------:|
@@ -45,6 +46,8 @@ where the symbols mean the following:
 | $f_{i,x}$  | Function of model variables | Hypergeometric distribution function|
 
 Unless states otherwise, we will only consider the original model which does not have any input file and $A$ will therefore vary according to these equations.
+
+## How the parameters are implemented and interpreted
 
 For initializing the system, the vCOMBAT C implementation (after some modifications) accepts the following parameters with the corresponding units of measurements:
 
@@ -74,22 +77,26 @@ $d_x = \begin{cases} 0 & x < k_T  \\ D_0 & x\geq k_T \end{cases}$
 This is, the graphs look something like this:
 """
 
-
-# ╔═╡ 9810896b-8b08-4d69-af63-4b4e5cde9f30
-
-
 # ╔═╡ a4e248f1-dc9a-475d-b72a-f3c12198b580
 load("replication_killing_rates.png")
 
 # ╔═╡ 6fb53591-d97f-429c-b879-3b7030e65719
 md"""
+
+## Internal conversion from macroscopic to molecular units
+
 Internally, the vCOMBAT implementation converts the drug concentration measured in mass per volume to the number of drug molecules per cell before the simulation is run:
 $$A_{\text{Molecular}}=\frac{A_{\text{Macroscopic}}\cdot V\cdot n_A}{W}$$
 We verify that this actually yields the number of molecules per cell by checking the units:
 $$\left[A_{\text{Molecular}}\right]=\left[\frac{A_{\text{Macroscopic}}\cdot V\cdot n_A}{W}\right]=\frac{\left[A_{\text{Macroscopic}}\right]\cdot \left[V\right]\cdot \left[n_A\right]}{\left[W\right]}=\frac{\frac{\mathrm{g}}{\mathrm{L}}\cdot \frac{\mathrm{L}}{\mathrm{Cell}}\cdot \frac{1}{\text{mol}}}{\frac{\text{g}}{\text{mol}}}=\frac{1}{\mathrm{Cell}},$$
-which is exactly as intended.
+which is exactly as intended. By the same logic, the model variables $A_T$ and $T$ are represented in terms of number per cell.
 
-We next go through the equations in the COMBAT model: Since the measurement unit of $B_x$ is $\left[B_x\right]=\mathrm{Cells}$, the measurement unit of $\frac{\text {d}B_x}{\mathrm{d}t}$ is $\left[\frac{\text {d}B_x}{\mathrm{d}t}\right]=\frac{\left[B_x\right]}{\left[t\right]}=\frac{\mathrm{Cell}}{s}$. We now prepare to check whether the right side of this equation conforms with these dimensions. First, we assert that the quantity $\frac{C-\sum\limits _{j=0}^{n}B_j}{C}$ is dimensionless:
+## Dimensional analysis of the equations
+
+We perform dimensional analysis on the equations of the COMBAT model is assessed whether the units used are compatible
+
+### $B_x$
+Since the measurement unit of $B_x$ is $\left[B_x\right]=\mathrm{Cells}$, the measurement unit of $\frac{\text {d}B_x}{\mathrm{d}t}$ is $\left[\frac{\text {d}B_x}{\mathrm{d}t}\right]=\frac{\left[B_x\right]}{\left[t\right]}=\frac{\mathrm{Cell}}{s}$. We now prepare to check whether the right side of this equation conforms with these dimensions. First, we assert that the quantity $\frac{C-\sum\limits _{j=0}^{n}B_j}{C}$ is dimensionless:
 $$\left[\frac{C-\sum\limits_{j=0}^{n}B_j}{C}\right]=\frac{\left[C\right]-\left[\sum\limits_{j=0}^{n}B_j\right]}{\left[C\right]}=\frac{\mathrm{Cell}-\sum\limits_{j=0}^{n}\left[B_j\right]}{\mathrm{Cell}}=\frac{\mathrm{Cell}-\sum\limits_{j=0}^{n}\mathrm{Cell}}{\mathrm{Cell}}=\frac{\mathrm{Cell}}{\mathrm{Cell}}=1$$
 
 Next, we find the measurement unit of $\rho_x$:
@@ -107,12 +114,47 @@ $$\begin{aligned}
 \left[\frac{k_{f}}{Vn_{A}}(n-x+1)AB_{x-1} - k_{r}xB_x - \frac{k_{f}}{Vn_{A}}(n-x)AB_x + \right. \\ \left. \quad k_{r}(x+1)B_{x+1} + \rho _x -r_xB_x \frac{C-\sum _{j=0}^{n}B_j}{C} -d_xB_x\right] = \\
 \left[\frac{k_{f}}{Vn_{A}}(n-x+1)AB_{x-1}\right] - \left[k_{r}xB_x\right] - \left[\frac{k_{f}}{Vn_{A}}(n-x)AB_x\right] + \\ \quad \left[k_{r}(x+1)B_{x+1}\right] + \left[\rho_x\right] - \left[r_xB_x \frac{C-\sum _{j=0}^{n}B_j}{C}\right] -\left[d_xB_x\right] = \\
 \frac{\left[k_{f}\right]}{\left[V\right]\left[n_{A}\right]}\left[n-x+1\right]\left[A\right]\left[B_{x-1}\right] - \left[k_{r}\right]\left[x\right]\left[B_x\right] - \frac{\left[k_{f}\right]}{\left[V\right]\left[n_{A}\right]}\left[n-x\right]\left[A\right]\left[B_{x}\right] + \\ \quad \left[k_{r}\right]\left[x+1\right]\left[B_{x+1}\right] + \left[\rho_x\right] - \left[r_x\right]\left[B_x\right] \left[\frac{C-\sum _{j=0}^{n}B_j}{C}\right] -\left[d_x\right]\left[B_x\right] = \\
-\frac{\frac{\mathrm{L}}{\mathrm{mol}\cdot \mathrm{s}}}{\frac{\mathrm{L}}{\mathrm{Cell}}\cdot{\frac{\mathrm{1}}{\mathrm{mol}}}}\cdot 1\cdot\frac{1}{\mathrm{Cell}}\cdot{\mathrm{Cell}} - \left[k_{r}\right]\left[x\right]\left[B_x\right] - \frac{\frac{\mathrm{L}}{\mathrm{mol}\cdot \mathrm{s}}}{\frac{\mathrm{L}}{\mathrm{Cell}}\cdot{\frac{\mathrm{1}}{\mathrm{mol}}}}\cdot 1\cdot\frac{1}{\mathrm{Cell}}\cdot{\mathrm{Cell}} + \\ \quad \left[k_{r}\right]\left[x+1\right]\left[B_{x+1}\right] + \left[\rho_x\right] - \left[r_x\right]\left[B_x\right] \left[\frac{C-\sum _{j=0}^{n}B_j}{C}\right] -\left[d_x\right]\left[B_x\right]
+\frac{\frac{\mathrm{L}}{\mathrm{mol}\cdot \mathrm{s}}}{\frac{\mathrm{L}}{\mathrm{Cell}}\cdot{\frac{\mathrm{1}}{\mathrm{mol}}}}\cdot 1\cdot\frac{1}{\mathrm{Cell}}\cdot{\mathrm{Cell}} - \frac{1}{\mathrm{s}}\cdot 1\cdot\mathrm{Cell} - \frac{\frac{\mathrm{L}}{\mathrm{mol}\cdot \mathrm{s}}}{\frac{\mathrm{L}}{\mathrm{Cell}}\cdot{\frac{\mathrm{1}}{\mathrm{mol}}}}\cdot 1\cdot\frac{1}{\mathrm{Cell}}\cdot{\mathrm{Cell}} + \\
+\quad \frac{1}{\mathrm{s}}\cdot 1\cdot\mathrm{Cell} + \frac{\mathrm{Cell}}{\mathrm{s}} - \frac{1}{\mathrm{s}}\cdot \mathrm{Cell} \cdot 1 - \frac{1}{\mathrm{s}}\cdot \mathrm{Cell} = \\
+\frac{\mathrm{Cell}}{\mathrm{s}}\cdot 1 - \frac{\mathrm{Cell}}{\mathrm{s}} - \frac{\mathrm{Cell}}{\mathrm{s}}\cdot 1 + 
+\\ \quad \frac{\mathrm{Cell}}{\mathrm{s}} + \frac{\mathrm{Cell}}{\mathrm{s}} - \frac{\mathrm{Cell}}{\mathrm{s}} - \frac{\mathrm{Cell}}{\mathrm{s}}=\\
+\frac{\mathrm{Cell}}{\mathrm{s}} - \frac{\mathrm{Cell}}{\mathrm{s}} - \frac{\mathrm{Cell}}{\mathrm{s}} + 
+\\ \quad \frac{\mathrm{Cell}}{\mathrm{s}} + \frac{\mathrm{Cell}}{\mathrm{s}} - \frac{\mathrm{Cell}}{\mathrm{s}} - \frac{\mathrm{Cell}}{\mathrm{s}}=\\
+\frac{\mathrm{Cell}}{\mathrm{s}}
 \end{aligned}$$
+Hence, the units of measurement conform for $B_x$.
 """
 
 # ╔═╡ 46f15089-a99c-41ed-8376-644e0c9331ac
+md"""
 
+### $A$
+We now proceed with the equation for $A$. Since $A$ is internally represented in molecular units, we have $\left[A\right]=\frac{1}{\mathrm{Cell}}$ and hence $\left[\frac{\text {d}A}{\mathrm{d}t}\right]=\frac{\left[A\right]}{\left[t\right]}=\frac{\frac{1}{\mathrm{Cell}}}{s}=\frac{1}{\mathrm{Cell}\cdot\mathrm{s}}$. Before proceeding, we note the interpretation of the terms $\left(n-x\right)B_x$ and $xB_x$:
+
+In the equation for $B_x$, the terms $\frac{k_{f}}{Vn_{A}}\left(n-x+1\right)AB_{x-1}$, $\frac{k_{f}}{Vn_{A}}\left(n-x\right)AB_{x}$, $k_{r}xB_x$, and $k_{r}\left(x+1\right)B_{x+1}$ denote the change in the number of bacteria in compartment $x$ due to binding or unbinding of the antibiotic. The factors $\left(n-x+1\right)$, $\left(n-x\right)$, $x$, and $\left(x+1\right)$ relate to the number of bound molecules or the number of unbound targets in their respective compartments. The way these factors are used in the equation is to denote that the rate of change is proportional to these constants and hence their units of measurements is dimensionsless. In the corresponding terms for $\left(n-x\right)B_x$ and $xB_x$, the quantities relates to how many antibiotic molecules are taken up or relased from compartment $B_x$. There are $B_x$ cells which each have $x$ antibiotic molecules to release and the potential to take up $n-x$ molecules. For this to make sense, we must interpret the factors $\left(n-x\right)$ and $x$ to have the unit of $\frac{1}{\mathrm{Cell}}$.
+
+For the right side of the equation for $\frac{\text{d}A}{\mathrm{d}t}$, we get:
+
+
+$$\begin{aligned}
+\left[- \frac{k_{f}}{Vn_{A}}(A\cdot T +\sum _{x=0}^{n-1}(n-x)AB_x) + k_{r}\left(A_T+\sum _{x=1}^{n}xB_x\right)\right]=\\
+- \left[\frac{k_{f}}{Vn_{A}}(A\cdot T +\sum _{x=0}^{n-1}(n-x)AB_x)\right] + \left[k_{r}\left(A_T+\sum _{x=1}^{n}xB_x\right)\right]=\\
+- \left[\frac{k_{f}}{Vn_{A}}\right]\left[A\cdot T +\sum _{x=0}^{n-1}(n-x)AB_x\right] + \left[k_r\right]\left[A_T+\sum _{x=1}^{n}xB_x\right]=\\
+-\frac{\left[k_{f}\right]}{\left[V\right]\left[n_{A}\right]}\cdot\left(\left[A\cdot T\right]+\left[\sum _{x=0}^{n-1}(n-x)AB_x\right]\right)+\left[k_r\right]\left(\left[A_T\right]+\left[\sum _{x=1}^{n}xB_x\right]\right)=\\
+-\frac{\frac{\mathrm{L}}{\mathrm{mol}\cdot \mathrm{s}}}{\frac{\mathrm{L}}{\mathrm{Cell}}\cdot\frac{1}{\mathrm{mol}}}\cdot\left(\left[A\right]\cdot \left[T\right]+\sum _{x=0}^{n-1}\left[(n-x)AB_x\right]\right)+\frac{1}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}}+\sum_{x=1}^{n}\left[xB_x\right]\right)=\\
+-\frac{\mathrm{Cell}}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}}\cdot \frac{1}{\mathrm{Cell}}+\sum _{x=0}^{n-1}\left[n-x\right]\left[A\right]\left[B_x\right]\right)+\frac{1}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}}+\sum_{x=1}^{n}\left[x\right]\left[B_x\right]\right)=\\
+-\frac{\mathrm{Cell}}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}^2}+\sum _{x=0}^{n-1}\frac{1}{\mathrm{Cell}}\cdot \frac{1}{\mathrm{Cell}}\cdot \mathrm{Cell}\right)+\frac{1}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}}+\sum_{x=1}^{n}\frac{1}{\mathrm{Cell}}\cdot\mathrm{Cell}\right)=\\
+-\frac{\mathrm{Cell}}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}^2}+\sum _{x=0}^{n-1}\frac{1}{\mathrm{Cell}}\right)+\frac{1}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}}+\sum_{x=1}^{n}1\right)=\\
+-\frac{\mathrm{Cell}}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}^2}+\frac{1}{\mathrm{Cell}}\right)+\frac{1}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}}+1\right)=\\
+-\frac{1}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}}+1\right)+\frac{1}{\mathrm{s}}\cdot\left(\frac{1}{\mathrm{Cell}}+1\right)
+\end{aligned}$$
+
+Here, we arrive at a paradox, the equation tells us to add quantities of unit $1$ (dimensionless) and $\frac{1}{\mathrm{Cell}}$ which is impossible. Hence, the equation must be inconsistent. Also note that the terms originating from $A\cdot T$ and $A_T$ have the expected unit of $\frac{1}{\mathrm{Cell}\cdot\mathrm{s}}$, whereas the terms originating from $\left(n-x\right)AB_x$ and $xB_x$ have the *wrong* unit of $\frac{1}{\mathrm{s}}$. Intuitively, we can reason that the terms $\frac{k_{f}}{Vn_{A}}\cdot (n-x)AB_x$ and $k_rxB_x$ corresponds to the total number of antibiotic molecules being absorbed or released in total for the entire system and not for each individual cell. We could potentially resolve this problem by modifying the equation to:
+
+$$\frac{\text {d}A}{\mathrm{d}t} = - \frac{k_{f}}{Vn_{A}}\left(A\cdot T +\sum _{x=0}^{n-1}\frac{(n-x)AB_x}{\sum\limits_{x=0}^{n}B_x}\right) + k_{r}\left(A_T+\sum _{x=1}^{n}\frac{xB_x}{\sum\limits_{x=0}^{n}B_x}\right),$$
+
+but there is another major disadvantage of this choice of units of measurement: The total number of cells in the system changes when bacteria divide and die even when the total number of antibiotic molecules stay the same.
+"""
 
 # ╔═╡ 6c4957cb-182f-406e-9ac1-96cc53f37780
 
@@ -2015,7 +2057,6 @@ version = "1.4.1+1"
 # ╠═0c510bda-1aa8-4920-9781-0e1962abc32c
 # ╠═bc91be1f-92f3-4ed7-8038-33a1e41012d1
 # ╠═53a4d7b0-9aa8-11ef-2a21-01318b24dbbe
-# ╠═9810896b-8b08-4d69-af63-4b4e5cde9f30
 # ╟─a4e248f1-dc9a-475d-b72a-f3c12198b580
 # ╠═6fb53591-d97f-429c-b879-3b7030e65719
 # ╠═46f15089-a99c-41ed-8376-644e0c9331ac
