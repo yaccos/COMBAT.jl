@@ -156,45 +156,6 @@ $$\frac{\text {d}A}{\mathrm{d}t} = - \frac{k_{f}}{Vn_{A}}\left(A\cdot T +\sum _{
 but there is another major disadvantage of this choice of units of measurement: The total number of cells in the system changes when bacteria divide and die even when the total number of antibiotic molecules stay the same.
 """
 
-# ╔═╡ 6c4957cb-182f-406e-9ac1-96cc53f37780
-
-
-# ╔═╡ 35fedd69-da27-4490-b5c3-8f75348504c4
-
-
-# ╔═╡ 59081412-d382-4147-9d52-ce3d32fe006e
-
-
-# ╔═╡ c0462c6d-9c65-4f4b-8ba4-bde4b3df5a11
-
-
-# ╔═╡ 2068d33b-b77f-4669-ad1a-7e28dcc21feb
-
-
-# ╔═╡ 387ad88d-2b66-4f17-94d3-9c31c79151b3
-
-
-# ╔═╡ 422238c1-b6ab-418a-9a18-c35f670ae748
-
-
-# ╔═╡ 0fc42696-ae2a-4968-8efb-afc559ab7634
-
-
-# ╔═╡ 6350e277-05f9-464c-b512-fc9f9419961e
-
-
-# ╔═╡ 5f6ddf5c-6c6b-4ed2-bdcc-10b58bf7d306
-
-
-# ╔═╡ fbc14c2a-f32a-4ad1-a246-e4df80bf3ec8
-
-
-# ╔═╡ cce7405c-1743-406c-af83-6841fe70eb3d
-
-
-# ╔═╡ b0c9a8a2-36a8-4c9d-a6e6-032a1ef99962
-
-
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -2058,20 +2019,7 @@ version = "1.4.1+1"
 # ╠═bc91be1f-92f3-4ed7-8038-33a1e41012d1
 # ╠═53a4d7b0-9aa8-11ef-2a21-01318b24dbbe
 # ╟─a4e248f1-dc9a-475d-b72a-f3c12198b580
-# ╠═6fb53591-d97f-429c-b879-3b7030e65719
-# ╠═46f15089-a99c-41ed-8376-644e0c9331ac
-# ╠═6c4957cb-182f-406e-9ac1-96cc53f37780
-# ╠═35fedd69-da27-4490-b5c3-8f75348504c4
-# ╠═59081412-d382-4147-9d52-ce3d32fe006e
-# ╠═c0462c6d-9c65-4f4b-8ba4-bde4b3df5a11
-# ╠═2068d33b-b77f-4669-ad1a-7e28dcc21feb
-# ╠═387ad88d-2b66-4f17-94d3-9c31c79151b3
-# ╠═422238c1-b6ab-418a-9a18-c35f670ae748
-# ╠═0fc42696-ae2a-4968-8efb-afc559ab7634
-# ╠═6350e277-05f9-464c-b512-fc9f9419961e
-# ╠═5f6ddf5c-6c6b-4ed2-bdcc-10b58bf7d306
-# ╠═fbc14c2a-f32a-4ad1-a246-e4df80bf3ec8
-# ╠═cce7405c-1743-406c-af83-6841fe70eb3d
-# ╠═b0c9a8a2-36a8-4c9d-a6e6-032a1ef99962
+# ╟─6fb53591-d97f-429c-b879-3b7030e65719
+# ╟─46f15089-a99c-41ed-8376-644e0c9331ac
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
