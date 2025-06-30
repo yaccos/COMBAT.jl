@@ -13,49 +13,50 @@ Value(x::Unitful.AbstractQuantity) = x.val
 # If we do not specify this as a subtype of AbstractVector, the Broadcast machinery will try to convert it into
 # a broadcastable representation, but we make this type to be broadcastable as-is due to our customizations of
 # copy and copyto!
-mutable struct HeterogenousVector{T, S <: NamedTuple} <: AbstractVector{T}
+
+# Helper function to wrap scalars in Ref for mutability
+_make_mutable(x) = x isa AbstractArray ? x : Ref(x)
+_unwrap(x) = x isa Ref ? x[] : x
+_set_value!(x::Ref, val) = (x[] = val)
+_set_value!(x::AbstractArray, val, idx) = (x[idx] = val)
+
+struct HeterogenousVector{T, S <: NamedTuple} <: AbstractVector{T}
     x::S
     function HeterogenousVector(x::NamedTuple)
-        arg_types = map(RecursiveArrayTools.recursive_bottom_eltype,values(x))
+        # Wrap scalar fields in Ref for mutability
+        mutable_x = map(_make_mutable, x)
+        arg_types = map(field -> RecursiveArrayTools.recursive_bottom_eltype(_unwrap(field)), values(mutable_x))
         T = promote_type(arg_types...)
-        new{T,typeof(x)}(x)
+        new{T, typeof(mutable_x)}(mutable_x)
     end
 
-    # Constructor with keyword arguments - field names determined by keywords
+    # Constructor with keyword arguments
     function HeterogenousVector(; kwargs...)
         x = NamedTuple(kwargs)
-        arg_types = map(RecursiveArrayTools.recursive_bottom_eltype, values(x))
-        T = promote_type(arg_types...)
-        new{T, typeof(x)}(x)
+        HeterogenousVector(x)
     end
 
-    # Constructor with positional arguments (keeping the original functionality)
+    # Constructor with positional arguments
     function HeterogenousVector(args...)
-        # Convert positional args to NamedTuple with generated names
         names = ntuple(i -> Symbol("field_$i"), length(args))
         x = NamedTuple{names}(args)
         HeterogenousVector(x)
     end
 end
 
-# Complete the HeterogenousVector implementation
-Base.length(hv::HeterogenousVector) = sum(field -> field isa AbstractArray ? length(field) : 1, hv.x)
-Base.size(hv::HeterogenousVector) = (length(hv),)
-Base.firstindex(hv::HeterogenousVector) = 1
-Base.lastindex(hv::HeterogenousVector) = length(hv)
-
 function Base.getindex(hv::HeterogenousVector{T}, idx::Int) where {T}
     current_idx = 1
     for (name, field) in pairs(hv.x)
-        if field isa AbstractArray
-            field_length = length(field)
+        unwrapped_field = _unwrap(field)
+        if unwrapped_field isa AbstractArray
+            field_length = length(unwrapped_field)
             if current_idx <= idx < current_idx + field_length
-                return field[idx - current_idx + 1]
+                return unwrapped_field[idx - current_idx + 1]
             end
             current_idx += field_length
         else
             if idx == current_idx
-                return field
+                return unwrapped_field
             end
             current_idx += 1
         end
@@ -66,18 +67,18 @@ end
 function Base.setindex!(hv::HeterogenousVector{T}, val, idx::Int) where {T}
     current_idx = 1
     for (name, field) in pairs(hv.x)
-        if field isa AbstractArray
-            field_length = length(field)
+        unwrapped_field = _unwrap(field)
+        if unwrapped_field isa AbstractArray
+            field_length = length(unwrapped_field)
             if current_idx <= idx < current_idx + field_length
-                field[idx - current_idx + 1] = val
+                unwrapped_field[idx - current_idx + 1] = val
                 return val
             end
             current_idx += field_length
         else
             if idx == current_idx
-                # For scalar fields, we need to update the NamedTuple
-                new_x = merge(hv.x, NamedTuple{(name,)}((val,)))
-                hv.x = new_x
+                # Mutate the Ref directly
+                _set_value!(field, val)
                 return val
             end
             current_idx += 1
@@ -86,8 +87,20 @@ function Base.setindex!(hv::HeterogenousVector{T}, val, idx::Int) where {T}
     throw(BoundsError(hv, idx))
 end
 
+# Update length calculation
+Base.length(hv::HeterogenousVector) = sum(field -> begin
+    unwrapped = _unwrap(field)
+    unwrapped isa AbstractArray ? length(unwrapped) : 1
+end, hv.x)
+
+# Complete the HeterogenousVector implementation
+Base.length(hv::HeterogenousVector) = sum(field -> field isa AbstractArray ? length(field) : 1, hv.x)
+Base.size(hv::HeterogenousVector) = (length(hv),)
+Base.firstindex(hv::HeterogenousVector) = 1
+Base.lastindex(hv::HeterogenousVector) = length(hv)
+
 function Base.copy(hv::HeterogenousVector)
-    copied_x = map(field -> field isa AbstractArray ? copy(field) : field, hv.x)
+    copied_x = map(field -> field isa AbstractArray ? copy(field) : _unwrap(field), hv.x)
     HeterogenousVector(copied_x)
 end
 
@@ -104,25 +117,27 @@ function Base.copy!(dst::HeterogenousVector, src::HeterogenousVector)
             copy!(dst_field, src_field)
         else
             # Update scalar field
-            new_x = merge(dst.x, NamedTuple{(name,)}((src_field,)))
-            dst.x = new_x
+            if !(src_field isa Ref) && !(dst_field isa Ref)
+                throw(ArgumentError("Fields must be mutable references or arrays"))
+            end
+            _set_value!(dst_field, _unwrap(src_field))
         end
     end
     return dst
 end
 
 function Base.similar(hv::HeterogenousVector{T}) where {T}
-    similar_x = map(field -> field isa AbstractArray ? similar(field) : zero(typeof(field)), hv.x)
+    similar_x = map(field -> field isa AbstractArray ? similar(field) : zero(typeof(_unwrap(field))), hv.x)
     HeterogenousVector(similar_x)
 end
 
 function Base.similar(hv::HeterogenousVector, ::Type{S}) where {S}
-    similar_x = map(field -> field isa AbstractArray ? similar(field, S) : zero(S), hv.x)
+    similar_x = map(field -> field isa AbstractArray ? similar(field, S) : zero(_unwrap(S)), hv.x)
     HeterogenousVector(similar_x)
 end
 
 function Base.zero(hv::HeterogenousVector)
-    zero_x = map(field -> field isa AbstractArray ? zero(field) : zero(field), hv.x)
+    zero_x = map(field -> field isa AbstractArray ? zero(field) : zero(_unwrap(field)), hv.x)
     HeterogenousVector(zero_x)
 end
 
@@ -180,8 +195,12 @@ function Base.copyto!(dest::HeterogenousVector, bc::Broadcast.Broadcasted{Broadc
         else
             # Update scalar field
             new_value = f(field_args...)
-            new_x = merge(dest.x, NamedTuple{(name,)}((new_value,)))
-            dest.x = new_x
+            # Ensure the field is mutable
+            if !(dest_field isa Ref)
+                throw(ArgumentError("Fields must be mutable references or arrays"))
+            end
+            # Set the new value
+            _set_value!(dst_field, new_value)
         end
     end
     

@@ -22,10 +22,10 @@ u0 = initialize_system(model_params)
 
 abstol_struct = similar(u0)
 
-abstol_struct.x.A = abstol*oneunit(abstol_struct.x.A)
-abstol_struct.x.T = abstol*oneunit(abstol_struct.x.T)
-abstol_struct.x.AT = abstol*oneunit(abstol_struct.x.AT)
-fill!(abstol_struct.x.B,abstol*oneunit(eltype(abstol_struct.x.B)))
+abstol_struct.A = abstol*oneunit(abstol_struct.A)
+abstol_struct.T = abstol*oneunit(abstol_struct.T)
+abstol_struct.AT = abstol*oneunit(abstol_struct.AT)
+fill!(abstol_struct.B,abstol*oneunit(eltype(abstol_struct.B)))
 
 function ode_system!(du, u, p, t)
     
