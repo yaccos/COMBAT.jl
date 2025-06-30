@@ -7,6 +7,14 @@ Value(x::Type{T}) where {T <:Number} = T
 Value(x::Type{Unitful.AbstractQuantity{T, D, U}}) where {T, D, U} = T
 Value(x::Unitful.AbstractQuantity) = x.val
 
+
+# If we do not specify this as a subtype of AbstractVector, the Broadcast machinery will try to convert it into
+# a broadcastable representation, but we make this type to be broadcastable as-is due to our customizations of
+# copy and copyto!
+mutable struct HeterogenousVector{T, S <: Tuple} <: AbstractVector{T}
+    data::S
+end
+
 # If we do not specify this as a subtype of AbstractVector, the Broadcast machinery will try to convert it into
 # a broadcastable representation, but we make this type to be broadcastable as-is due to our customizations of
 # copy and copyto!
