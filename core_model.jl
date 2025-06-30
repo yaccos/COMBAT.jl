@@ -2,7 +2,8 @@ using PhysicalConstants.CODATA2018
 using Unitful
 using DifferentialEquations
 using BenchmarkTools
-include("array_interface.jl")
+using Revise
+include("heterogenous_vector.jl")
 include("params.jl")
 
 # Initial conditions
@@ -14,17 +15,17 @@ function initialize_system(params)
     B_0 = params.B_0
     B_start = zeros(typeof(B_0),params.n+1)
     B_start[1] = B_0
-    DiscreteSimulationVariables(A_0,T_0,AT_0,B_start)
+    HeterogenousVector(A=A_0,T=T_0,AT=AT_0,B=B_start)
 end
 
 u0 = initialize_system(model_params)
 
 abstol_struct = similar(u0)
 
-abstol_struct.A = abstol*oneunit(abstol_struct.A)
-abstol_struct.T = abstol*oneunit(abstol_struct.T)
-abstol_struct.AT = abstol*oneunit(abstol_struct.AT)
-fill!(abstol_struct.B,abstol*oneunit(eltype(abstol_struct.B)))
+abstol_struct.x.A = abstol*oneunit(abstol_struct.x.A)
+abstol_struct.x.T = abstol*oneunit(abstol_struct.x.T)
+abstol_struct.x.AT = abstol*oneunit(abstol_struct.x.AT)
+fill!(abstol_struct.x.B,abstol*oneunit(eltype(abstol_struct.x.B)))
 
 function ode_system!(du, u, p, t)
     

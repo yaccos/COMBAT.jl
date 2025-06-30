@@ -14,39 +14,39 @@ Value(x::Unitful.AbstractQuantity) = x.val
 # a broadcastable representation, but we make this type to be broadcastable as-is due to our customizations of
 # copy and copyto!
 mutable struct HeterogenousVector{T, S <: NamedTuple} <: AbstractVector{T}
-    data::S
-    function HeterogenousVector(data::NamedTuple)
-        arg_types = map(RecursiveArrayTools.recursive_bottom_eltype,values(data))
+    x::S
+    function HeterogenousVector(x::NamedTuple)
+        arg_types = map(RecursiveArrayTools.recursive_bottom_eltype,values(x))
         T = promote_type(arg_types...)
-        new{T,typeof(data)}(data)
+        new{T,typeof(x)}(x)
     end
 
     # Constructor with keyword arguments - field names determined by keywords
     function HeterogenousVector(; kwargs...)
-        data = NamedTuple(kwargs)
-        arg_types = map(RecursiveArrayTools.recursive_bottom_eltype, values(data))
+        x = NamedTuple(kwargs)
+        arg_types = map(RecursiveArrayTools.recursive_bottom_eltype, values(x))
         T = promote_type(arg_types...)
-        new{T, typeof(data)}(data)
+        new{T, typeof(x)}(x)
     end
 
     # Constructor with positional arguments (keeping the original functionality)
     function HeterogenousVector(args...)
         # Convert positional args to NamedTuple with generated names
         names = ntuple(i -> Symbol("field_$i"), length(args))
-        data = NamedTuple{names}(args)
-        HeterogenousVector(data)
+        x = NamedTuple{names}(args)
+        HeterogenousVector(x)
     end
 end
 
 # Complete the HeterogenousVector implementation
-Base.length(hv::HeterogenousVector) = sum(field -> field isa AbstractArray ? length(field) : 1, hv.data)
+Base.length(hv::HeterogenousVector) = sum(field -> field isa AbstractArray ? length(field) : 1, hv.x)
 Base.size(hv::HeterogenousVector) = (length(hv),)
 Base.firstindex(hv::HeterogenousVector) = 1
 Base.lastindex(hv::HeterogenousVector) = length(hv)
 
 function Base.getindex(hv::HeterogenousVector{T}, idx::Int) where {T}
     current_idx = 1
-    for (name, field) in pairs(hv.data)
+    for (name, field) in pairs(hv.x)
         if field isa AbstractArray
             field_length = length(field)
             if current_idx <= idx < current_idx + field_length
@@ -65,7 +65,7 @@ end
 
 function Base.setindex!(hv::HeterogenousVector{T}, val, idx::Int) where {T}
     current_idx = 1
-    for (name, field) in pairs(hv.data)
+    for (name, field) in pairs(hv.x)
         if field isa AbstractArray
             field_length = length(field)
             if current_idx <= idx < current_idx + field_length
@@ -76,8 +76,8 @@ function Base.setindex!(hv::HeterogenousVector{T}, val, idx::Int) where {T}
         else
             if idx == current_idx
                 # For scalar fields, we need to update the NamedTuple
-                new_data = merge(hv.data, NamedTuple{(name,)}((val,)))
-                hv.data = new_data
+                new_x = merge(hv.x, NamedTuple{(name,)}((val,)))
+                hv.x = new_x
                 return val
             end
             current_idx += 1
@@ -87,43 +87,43 @@ function Base.setindex!(hv::HeterogenousVector{T}, val, idx::Int) where {T}
 end
 
 function Base.copy(hv::HeterogenousVector)
-    copied_data = map(field -> field isa AbstractArray ? copy(field) : field, hv.data)
-    HeterogenousVector(copied_data)
+    copied_x = map(field -> field isa AbstractArray ? copy(field) : field, hv.x)
+    HeterogenousVector(copied_x)
 end
 
 function Base.copy!(dst::HeterogenousVector, src::HeterogenousVector)
     # Ensure both have the same structure
-    if keys(dst.data) != keys(src.data)
+    if keys(dst.x) != keys(src.x)
         throw(ArgumentError("HeterogenousVectors must have the same field names"))
     end
     
-    for name in keys(dst.data)
-        src_field = getfield(src.data, name)
-        dst_field = getfield(dst.data, name)
+    for name in keys(dst.x)
+        src_field = getfield(src.x, name)
+        dst_field = getfield(dst.x, name)
         if src_field isa AbstractArray && dst_field isa AbstractArray
             copy!(dst_field, src_field)
         else
             # Update scalar field
-            new_data = merge(dst.data, NamedTuple{(name,)}((src_field,)))
-            dst.data = new_data
+            new_x = merge(dst.x, NamedTuple{(name,)}((src_field,)))
+            dst.x = new_x
         end
     end
     return dst
 end
 
 function Base.similar(hv::HeterogenousVector{T}) where {T}
-    similar_data = map(field -> field isa AbstractArray ? similar(field) : zero(typeof(field)), hv.data)
-    HeterogenousVector(similar_data)
+    similar_x = map(field -> field isa AbstractArray ? similar(field) : zero(typeof(field)), hv.x)
+    HeterogenousVector(similar_x)
 end
 
 function Base.similar(hv::HeterogenousVector, ::Type{S}) where {S}
-    similar_data = map(field -> field isa AbstractArray ? similar(field, S) : zero(S), hv.data)
-    HeterogenousVector(similar_data)
+    similar_x = map(field -> field isa AbstractArray ? similar(field, S) : zero(S), hv.x)
+    HeterogenousVector(similar_x)
 end
 
 function Base.zero(hv::HeterogenousVector)
-    zero_data = map(field -> field isa AbstractArray ? zero(field) : zero(field), hv.data)
-    HeterogenousVector(zero_data)
+    zero_x = map(field -> field isa AbstractArray ? zero(field) : zero(field), hv.x)
+    HeterogenousVector(zero_x)
 end
 
 # Broadcasting support for HeterogenousVector
@@ -146,7 +146,7 @@ find_heterogenous_vector(::Any, rest) = find_heterogenous_vector(rest)
 # Generic field unpacking for HeterogenousVector
 @generated function unpack_field(hv::HeterogenousVector{T, S}, field::Symbol) where {T, S}
     if field in fieldnames(S)
-        :(getfield(hv.data, field))
+        :(getfield(hv.x, field))
     else
         :(throw(ArgumentError("Field $field not found in HeterogenousVector")))
     end
@@ -159,29 +159,29 @@ function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}
     args = bc.args
     
     # Apply broadcast to each field
-    result_data = map(keys(hv.data)) do name
-        field_args = map(arg -> arg isa HeterogenousVector ? getfield(arg.data, name) : arg, args)
+    result_x = map(keys(hv.x)) do name
+        field_args = map(arg -> arg isa HeterogenousVector ? getfield(arg.x, name) : arg, args)
         f.(field_args...)
     end
     
-    HeterogenousVector(NamedTuple{keys(hv.data)}(result_data))
+    HeterogenousVector(NamedTuple{keys(hv.x)}(result_x))
 end
 
 function Base.copyto!(dest::HeterogenousVector, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
     f = bc.f
     args = bc.args
     
-    for name in keys(dest.data)
-        field_args = map(arg -> arg isa HeterogenousVector ? getfield(arg.data, name) : arg, args)
-        dest_field = getfield(dest.data, name)
+    for name in keys(dest.x)
+        field_args = map(arg -> arg isa HeterogenousVector ? getfield(arg.x, name) : arg, args)
+        dest_field = getfield(dest.x, name)
         
         if dest_field isa AbstractArray
             dest_field .= f.(field_args...)
         else
             # Update scalar field
             new_value = f(field_args...)
-            new_data = merge(dest.data, NamedTuple{(name,)}((new_value,)))
-            dest.data = new_data
+            new_x = merge(dest.x, NamedTuple{(name,)}((new_value,)))
+            dest.x = new_x
         end
     end
     
@@ -189,27 +189,5 @@ function Base.copyto!(dest::HeterogenousVector, bc::Broadcast.Broadcasted{Broadc
 end
 
 # Show methods for HeterogenousVector
-function Base.show(io::IO, hv::HeterogenousVector)
-    print(io, "HeterogenousVector with fields: ")
-    print(io, join(string.(keys(hv.data)), ", "))
-end
-
-function Base.show(io::IO, mime::MIME"text/plain", hv::HeterogenousVector)
-    multiline = get(io, :multiline, true)
-    if multiline
-        println(io, "HeterogenousVector with $(length(hv.data)) fields and $(length(hv)) elements:")
-        for (name, field) in pairs(hv.data)
-            print(io, "  $name: ")
-            if field isa AbstractArray
-                println(io, "$(typeof(field)) with $(length(field)) elements:")
-                for (i, value) in enumerate(field)
-                    println(io, "    [$i] = $value")
-                end
-            else
-                println(io, "$field")
-            end
-        end
-    else
-        Base.show_default(io, hv)
-    end
-end
+Base.summary(hv::HeterogenousVector) = string(typeof(hv), " with members:")
+Base.show(io::IO, m::MIME"text/plain", hv::HeterogenousVector) = show(io, m, hv.x)
