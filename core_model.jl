@@ -77,12 +77,10 @@ function ode_system!(du, u, p, t)
 
     # mapreduce is far more efficient than a broadcasted call over the array followed by a sum operation
     # This approach makes sure there are no or minimal allocations, considerably reducing overhead
-    unbound_targets = mapreduce(x -> free_target_number(x) / oneunit(eltype(B)) * B[x],+, eachindex(B))
-    bound_targets = mapreduce(x -> bound_target_number(x) / oneunit(eltype(B)) * B[x], +, eachindex(B))
-    free_targets_released = mapreduce(x -> p.d_x[x]*free_target_number(x) / oneunit(eltype(B)) * B[x],
-     +, eachindex(B))
-    bound_targets_released = mapreduce(x -> p.d_x[x]*bound_target_number(x) / oneunit(eltype(B)) * B[x],
-     +, eachindex(B))
+    unbound_targets = sum(x -> free_target_number(x) / oneunit(eltype(B)) * B[x], eachindex(B))
+    bound_targets = sum(x -> bound_target_number(x) / oneunit(eltype(B)) * B[x], eachindex(B))
+    free_targets_released = sum(x -> p.d_x[x]*free_target_number(x) / oneunit(eltype(B)) * B[x], eachindex(B))
+    bound_targets_released = sum(x -> p.d_x[x]*bound_target_number(x) / oneunit(eltype(B)) * B[x], eachindex(B))
     du.A = -binding_coefficient * (A*T + A*unbound_targets) +  
     p.k_r * (AT +  bound_targets)
     du.T = -binding_coefficient * A*T + p.k_r * AT + free_targets_released
