@@ -1,5 +1,7 @@
 using Unitful
+using Revise
 import RecursiveArrayTools
+
 
 # Copy-catted from DiffEqBase DiffEqBaseUnitfulExt.jl
 Value(x::Number) = x
@@ -8,12 +10,8 @@ Value(x::Type{Unitful.AbstractQuantity{T, D, U}}) where {T, D, U} = T
 Value(x::Unitful.AbstractQuantity) = x.val
 
 
-# If we do not specify this as a subtype of AbstractVector, the Broadcast machinery will try to convert it into
-# a broadcastable representation, but we make this type to be broadcastable as-is due to our customizations of
-# copy and copyto!
-mutable struct HeterogenousVector{T, S <: Tuple} <: AbstractVector{T}
-    data::S
-end
+
+
 
 # If we do not specify this as a subtype of AbstractVector, the Broadcast machinery will try to convert it into
 # a broadcastable representation, but we make this type to be broadcastable as-is due to our customizations of
@@ -31,6 +29,8 @@ mutable struct DiscreteSimulationVariables{T<:Number, U<:Number, V<:Number, W<:N
 end
 
 n_scalars(::DiscreteSimulationVariables{T, U, V, W, Z}) where {T, U, V, W, Z} =  length(fieldnames(DiscreteSimulationVariables{T, U, V, W, Z})) - 1
+
+
 
 # Define required AbstractVector methods
 Base.length(dsv::DiscreteSimulationVariables) = n_scalars(dsv) + length(dsv.B)
