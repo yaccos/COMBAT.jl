@@ -17,6 +17,7 @@ Value(x::Unitful.AbstractQuantity) = x.val
 
 # Helper function to wrap scalars in Ref for mutability
 _make_mutable(x::AbstractArray) = x
+_make_mutable(x::Ref) = x
 _make_mutable(x) = Ref(x)
 _unwrap(x::Ref) = x[]
 _unwrap(x) = x
@@ -137,7 +138,7 @@ Base.size(hv::HeterogenousVector) = (length(hv),)
 Base.firstindex(hv::HeterogenousVector) = 1
 Base.lastindex(hv::HeterogenousVector) = length(hv)
 
-_copy_field(field::Ref) = Ref(_unwrap(field))
+_copy_field(field::Ref) = _unwrap(field) |> Ref
 _copy_field(field::AbstractArray) = copy(field)
 function Base.copy(hv::HeterogenousVector)
     copied_x = map(_copy_field, hv.x)
@@ -191,7 +192,7 @@ find_heterogenous_vector(bc::Base.Broadcast.Broadcasted) = find_heterogenous_vec
 find_heterogenous_vector(args::Tuple) = find_heterogenous_vector(find_heterogenous_vector(args[1]), Base.tail(args))
 find_heterogenous_vector(x) = x
 find_heterogenous_vector(::Tuple{}) = nothing
-find_heterogenous_vector(::HeterogenousVector, rest) = x
+find_heterogenous_vector(x::HeterogenousVector, rest) = x
 find_heterogenous_vector(::Any, rest) = find_heterogenous_vector(rest)
 
 # Generic field unpacking for HeterogenousVector
@@ -206,14 +207,19 @@ end
 
 
 _get_field_arg(arg::HeterogenousVector, name::Symbol) = getfield(arg.x, name) |> _unwrap
+_get_field_arg(arg::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}}, name::Symbol) = Broadcast.broadcasted(arg.f,_get_field_arg(arg.args,name)...)
+# Fix the tuple handling for _get_field_arg
+_get_field_arg(args::Tuple, name::Symbol) = map(arg -> _get_field_arg(arg, name), args)
+
 _get_field_arg(arg, name::Symbol) = arg
 _copyto_dest_field!(dest_field::AbstractArray,field_args, f) = (dest_field .= f.(field_args...))
-_copyto_dest_field!(dest_field::AbstractArray,field_args, f) = _set_value!(dest_field,f(field_args...))
+_copyto_dest_field!(dest_field::Ref,field_args, f) = _set_value!(dest_field,f(field_args...))
 # If the field is an array, apply the function element-wise
-_get_field_res(field_args, f, prototype::AbstractArray) = f.(field_args...)
+_get_field_res(field_args, f, ::AbstractArray) = f.(field_args...)
 # If the field is a scalar, apply the function directly
-_get_field_res(field_args, f, prototype) = f(field_args...)
+_get_field_res(field_args, f, ::Any) = f(field_args...)
 # Update broadcasting copyto! to use the variable name correctly
+
 function Base.copyto!(dest::HeterogenousVector, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
     f = bc.f
     args = bc.args
@@ -235,7 +241,8 @@ function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}
     # Apply broadcast to each field
     result_x = map(keys(hv.x)) do name
         field_args = map(arg -> _get_field_arg(arg, name), args)
-        _get_field_res(field_args, f, getfield(hv.x, name))
+        proto_dest_field = getfield(hv.x, name)
+        _get_field_res(field_args, f, proto_dest_field)
     end
     HeterogenousVector(NamedTuple{keys(hv.x)}(result_x))
 end
