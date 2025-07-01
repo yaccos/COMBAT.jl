@@ -86,7 +86,6 @@ function ode_system!(du, u, p, t)
     p.k_r * (AT +  bound_targets)
     du.T = -binding_coefficient * A*T + p.k_r * AT + free_targets_released
     du.AT = binding_coefficient * A*T - p.k_r * AT + bound_targets_released
-    
     du
 end
 

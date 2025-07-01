@@ -182,10 +182,6 @@ end
 Base.BroadcastStyle(::Type{<:HeterogenousVector}) = Broadcast.Style{HeterogenousVector}()
 Base.BroadcastStyle(::Broadcast.Style{HeterogenousVector}, ::Base.Broadcast.BroadcastStyle) = Broadcast.Style{HeterogenousVector}()
 
-function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
-    hv = find_heterogenous_vector(bc)
-    similar(hv)
-end
 
 # Helper function to find HeterogenousVector in broadcast arguments
 find_heterogenous_vector(bc::Base.Broadcast.Broadcasted) = find_heterogenous_vector(bc.args)
@@ -195,42 +191,30 @@ find_heterogenous_vector(::Tuple{}) = nothing
 find_heterogenous_vector(x::HeterogenousVector, rest) = x
 find_heterogenous_vector(::Any, rest) = find_heterogenous_vector(rest)
 
-# Generic field unpacking for HeterogenousVector
-@generated function unpack_field(hv::HeterogenousVector{T, S}, field::Symbol) where {T, S}
-    if field in fieldnames(S)
-        :(getfield(hv.x, field))
-    else
-        :(throw(ArgumentError("Field $field not found in HeterogenousVector")))
-    end
+function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
+    hv = find_heterogenous_vector(bc)
+    similar(hv)
 end
 
 
+# Using generated functions here really helps performance
+@generated unpack_args(x::Any,::Symbol) = :(x)
+@generated unpack_args(x::HeterogenousVector,field::Symbol) = :(getfield(x.x, field))
+@generated unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}}, field::Symbol) = :(Broadcast.broadcasted(x.f,unpack_args(x.args,field)...))
+@generated unpack_args(::Tuple{}, ::Symbol) = :()
+@generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
 
-_get_field_arg(arg::HeterogenousVector, name::Symbol) = getfield(arg.x, name) |> _unwrap
-_get_field_arg(arg::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}}, name::Symbol) = Broadcast.broadcasted(arg.f,_get_field_arg(arg.args,name)...)
-# Fix the tuple handling for _get_field_arg
-_get_field_arg(args::Tuple, name::Symbol) = map(arg -> _get_field_arg(arg, name), args)
+# The constant propagation is appearently important to ensure type stability
+# Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield
 
-_get_field_arg(arg, name::Symbol) = arg
-_copyto_dest_field!(dest_field::AbstractArray,field_args, f) = (dest_field .= f.(field_args...))
-_copyto_dest_field!(dest_field::Ref,field_args, f) = _set_value!(dest_field,f(field_args...))
-# If the field is an array, apply the function element-wise
-_get_field_res(field_args, f, ::AbstractArray) = f.(field_args...)
-# If the field is a scalar, apply the function directly
-_get_field_res(field_args, f, ::Any) = f(field_args...)
-# Update broadcasting copyto! to use the variable name correctly
+# Using the low-level functions Broadcast.broadcasted or Broadcast.Broadcasted incur considerable
+# overhead due to some oddities in the Julia compiler when the arg tuple is not a bitset
+# This one is for copies and immutable fields
+@generated get_field_res(f, args::Tuple, field::Symbol) = :(broadcast(f,unpack_args(args, field)...))
+# This one is for copying to a mutable field
+@generated copyto_field_res!(dest::AbstractArray, f, args::Tuple, field::Symbol) = :(dest .= f.(unpack_args(args, field)...))
+@generated copyto_field_res!(dest::Ref, f, args::Tuple, field::Symbol) = :(dest[] = f.(unpack_args(args, field)...))
 
-function Base.copyto!(dest::HeterogenousVector, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
-    f = bc.f
-    args = bc.args
-    
-    for name in keys(dest.x)
-        field_args = map(arg -> _get_field_arg(arg,name), args)
-        dest_field = getfield(dest.x, name)
-        _copyto_dest_field!(dest_field, field_args, f)
-    end
-    return dest
-end
 
 # Broadcasting implementation
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
@@ -239,14 +223,27 @@ function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}
     args = bc.args
     
     # Apply broadcast to each field
-    result_x = map(keys(hv.x)) do name
-        field_args = map(arg -> _get_field_arg(arg, name), args)
-        proto_dest_field = getfield(hv.x, name)
-        _get_field_res(field_args, f, proto_dest_field)
+    res_args = map(keys(hv.x)) do name
+        get_field_res(f,args, name)
     end
-    HeterogenousVector(NamedTuple{keys(hv.x)}(result_x))
+    HeterogenousVector(NamedTuple{keys(hv.x)}(res_args))
 end
 
+@inline Base.@constprop :aggressive function Base.copyto!(dest::HeterogenousVector,bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
+    f = bc.f
+    args = bc.args
+    key_names = keys(dest.x)
+    # Using value types to specialize map_fun is indeed an ugly solution
+    # Constant propagation should **usually** make this unnecessary, but
+    # benchmarking has shown there are cases where this does not happen (even with aggressive const propagation),
+    # causing type unstability and costly runtime dispatch
+    function map_fun(::Val{name}) where {name}
+        target_field = getfield(dest.x, name)
+        copyto_field_res!(target_field, f, args, name)
+    end
+    map(map_fun, Val.(key_names))
+    dest
+end
 
 
 # Show methods for HeterogenousVector
