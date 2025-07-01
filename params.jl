@@ -1,6 +1,8 @@
+using PhysicalConstants.CODATA2018
 using Distributions
 using LinearAlgebra
-include("array_interface.jl")
+using Unitful
+include("heterogenous_vector.jl")
 
 @refunit cell "cell" Cells Unitful.𝐍 false
 

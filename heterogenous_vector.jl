@@ -1,6 +1,7 @@
 using Unitful
 using Revise
 import RecursiveArrayTools
+import Base.zero
 
 
 # Copy-catted from DiffEqBase DiffEqBaseUnitfulExt.jl
@@ -28,7 +29,7 @@ struct HeterogenousVector{T, S <: NamedTuple} <: AbstractVector{T}
     function HeterogenousVector(x::NamedTuple)
         # Wrap scalar fields in Ref for mutability
         mutable_x = map(_make_mutable, x)
-        arg_types = map(field -> _unwarp(field) |> RecursiveArrayTools.recursive_bottom_eltype, values(mutable_x))
+        arg_types = map(field -> _unwrap(field) |> RecursiveArrayTools.recursive_bottom_eltype, values(mutable_x))
         T = promote_type(arg_types...)
         new{T, typeof(mutable_x)}(mutable_x)
     end
@@ -163,8 +164,8 @@ function Base.copy!(dst::HeterogenousVector, src::HeterogenousVector)
     return dst
 end
 
-zero(x::Ref) = _unwrap(x) |> zero |> Ref
-similar(x::Ref) = zero(x)
+Base.zero(x::Ref) = _unwrap(x) |> zero
+Base.similar(x::Ref) = zero(x)
 
 function Base.similar(hv::HeterogenousVector{T}) where {T}
     similar_x = map(similar, hv.x)
