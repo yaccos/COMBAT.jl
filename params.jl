@@ -8,7 +8,9 @@ include("heterogenous_vector.jl")
 
 n_targets = 100
 starting_population = 1e6cell
-treatment_length = 86400.0u"s" # 7 days
+
+# treatment_length = 86400.0u"s" # 7 days
+treatment_length = 5.0u"hr"
 tsave = 0u"s":1u"hr":treatment_length # Saves the evolution of the system for each minute
 # tsave = 0u"s":60u"s":treatment_length # Saves the evolution of the system for each minute
 # We do not need any better accuracy than 0.01

@@ -83,9 +83,6 @@ end
 
 
 
-
-
-
 function Base.getindex(hv::HeterogenousVector{T}, idx::Int) where {T}
     current_idx = 1
     for (name, field) in pairs(hv.x)
@@ -199,7 +196,7 @@ end
 
 # Using generated functions here really helps performance
 @generated unpack_args(x::Any,::Symbol) = :(x)
-@generated unpack_args(x::HeterogenousVector,field::Symbol) = :(getfield(x.x, field))
+@generated unpack_args(x::HeterogenousVector, field::Symbol) = :(getfield(x.x, field) |> _unwrap)
 @generated unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}}, field::Symbol) = :(Broadcast.broadcasted(x.f,unpack_args(x.args,field)...))
 @generated unpack_args(::Tuple{}, ::Symbol) = :()
 @generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
@@ -229,7 +226,7 @@ function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}
     HeterogenousVector(NamedTuple{keys(hv.x)}(res_args))
 end
 
-@inline Base.@constprop :aggressive function Base.copyto!(dest::HeterogenousVector,bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
+@inline Base.@constprop :aggressive function Base.copyto!(dest::HeterogenousVector,bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
     f = bc.f
     args = bc.args
     key_names = keys(dest.x)
@@ -243,6 +240,33 @@ end
     end
     map(map_fun, Val.(key_names))
     dest
+end
+
+# Written specifically to deal with cases such as calculate_residuals!() where the destination is an ordinary Array
+@inline Base.@constprop :aggressive function Base.copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
+    f = bc.f
+    args = bc.args
+    hv = find_heterogenous_vector(bc)
+    # Points to the first index of the destination array
+    dest_idx = firstindex(dest)
+    
+    for (name, field) in pairs(hv.x)
+        unpacked_args = unpack_args(args, name)
+        
+        if field isa AbstractArray
+            # Process array field element by element
+            for i in eachindex(field)
+                element_args = map(arg -> arg isa AbstractArray ? arg[i] : arg, unpacked_args)
+                dest[dest_idx] = f.(element_args...)
+                dest_idx += 1
+            end
+        else
+            # Process scalar field
+            dest[dest_idx] = f.(unpacked_args...)
+            dest_idx += 1
+        end
+    end
+    return dest
 end
 
 
