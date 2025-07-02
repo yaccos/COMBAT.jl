@@ -146,8 +146,7 @@ end
 
 _copy_field!(dst::Ref, src::Ref) = _set_value!(dst, _unwrap(src))
 _copy_field!(dst::AbstractArray, src::AbstractArray) = copy!(dst, src)
-# Update the copy! function to handle the new interface properly
-function Base.copy!(dst::HeterogenousVector, src::HeterogenousVector)
+function Base.copyto!(dst::HeterogenousVector, src::HeterogenousVector)
     # Ensure both have the same structure
     if keys(dst.x) != keys(src.x)
         throw(ArgumentError("HeterogenousVectors must have the same field names"))
@@ -161,6 +160,8 @@ function Base.copy!(dst::HeterogenousVector, src::HeterogenousVector)
     end
     return dst
 end
+
+Base.copy!(dst::HeterogenousVector, src::HeterogenousVector) = Base.copyto!(dst, src)
 
 Base.zero(x::Ref) = _unwrap(x) |> zero
 Base.similar(x::Ref) = zero(x)
@@ -242,29 +243,34 @@ end
     dest
 end
 
+# Compute segment ranges for each field in the NamedTuple
+# The results are zero-indexed ranges, i.e. the first field starts at 0
+function _compute_segment_ranges(x::NamedTuple)
+    current_idx = 0
+    ranges = map(x) do field
+        field_length = _field_length(field)
+        range = current_idx:(current_idx + field_length - 1)
+        current_idx += field_length
+        range
+    end
+    return ranges
+end
+
+
 # Written specifically to deal with cases such as calculate_residuals!() where the destination is an ordinary Array
-@inline Base.@constprop :aggressive function Base.copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
+@inline Base.@constprop :aggressive function Base.copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
     f = bc.f
     args = bc.args
     hv = find_heterogenous_vector(bc)
+    S = typeof(hv.x)
     # Points to the first index of the destination array
     dest_idx = firstindex(dest)
-    
-    for (name, field) in pairs(hv.x)
+    segment_ranges = _compute_segment_ranges(hv.x)
+    map(fieldnames(S)) do name
         unpacked_args = unpack_args(args, name)
-        
-        if field isa AbstractArray
-            # Process array field element by element
-            for i in eachindex(field)
-                element_args = map(arg -> arg isa AbstractArray ? arg[i] : arg, unpacked_args)
-                dest[dest_idx] = f.(element_args...)
-                dest_idx += 1
-            end
-        else
-            # Process scalar field
-            dest[dest_idx] = f.(unpacked_args...)
-            dest_idx += 1
-        end
+        segment_range = segment_ranges[name]
+        dest_segment = view(dest, dest_idx .+ segment_range)
+        dest_segment .= f.(unpacked_args...)
     end
     return dest
 end
