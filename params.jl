@@ -9,15 +9,12 @@ include("heterogenous_vector.jl")
 n_targets = 100
 starting_population = 1e6cell
 
-# treatment_length = 86400.0u"s" # 7 days
-treatment_length = 5.0u"hr"
+treatment_length = 7.0u"d" # 86400.0u"s"
 tsave = 0u"s":1u"hr":treatment_length # Saves the evolution of the system for each minute
-# tsave = 0u"s":60u"s":treatment_length # Saves the evolution of the system for each minute
 # We do not need any better accuracy than 0.01
 abstol = 1e-2
 
 
-# initial_antibiotic_level = 1u"mg/L"
 initial_antibiotic_level = 1u"mg/L"
 maximum_kill_rate = 0.001u"1/s"
 killing_threshold = 60
@@ -29,7 +26,6 @@ intracellular_volume = 1e-15u"L"/cell
 unbinding_rate = 0.01u"1/s"
 carrying_capacity = 1e9cell
 molecular_weight = 555.5u"g/mol"
-# binding_rate = 1u"L/mol/s"
 binding_rate = 10000u"L/mol/s"
 N_A = AvogadroConstant
 binding_coefficient = binding_rate / (total_volume * N_A)
