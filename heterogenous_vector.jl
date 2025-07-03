@@ -49,15 +49,16 @@ struct HeterogenousVector{T, S <: NamedTuple} <: AbstractVector{T}
     end
 end
 
+function NamedTuple(hv::HeterogenousVector)
+    return getfield(hv, :x)
+end
 
 # Custom property access for clean external interface
+# Note: For accessing the named tuple field x, we must use getfield or invoking NamedTuple
 function Base.getproperty(hv::HeterogenousVector, name::Symbol)
-    if name === :x
-        # Allow access to the internal NamedTuple
-        return getfield(hv, :x)
-    elseif haskey(hv.x, name)
-        # Access field and unwrap if it's a Ref
-        field = getfield(hv.x, name)
+    if haskey(NamedTuple(hv), name)
+        #  Access field and unwrap if it's a Ref
+        field = getfield(NamedTuple(hv), name)
         return _unwrap(field)
     else
         error("HeterogenousVector has no field $name")
@@ -65,25 +66,25 @@ function Base.getproperty(hv::HeterogenousVector, name::Symbol)
 end
 
 function Base.setproperty!(hv::HeterogenousVector, name::Symbol, value)
-    if name === :x
-        # Prevent direct assignment to internal structure
-        error("Cannot directly assign to internal field :x")
-    elseif haskey(hv.x, name)
+    if haskey(NamedTuple(hv), name)
         # Set field value, wrapping in Ref if it's a scalar
-        field = getfield(hv.x, name)
+        field = getfield(NamedTuple(hv), name)
         _set_value!(field, value)
     else
         error("HeterogenousVector has no field $name")
     end
 end
 
+
 function Base.propertynames(hv::HeterogenousVector)
-    return keys(hv.x)
+    return keys(NamedTuple(hv))
 end
 
-function Base.getindex(hv::HeterogenousVector{T}, idx::Int) where {T}
+Base.pairs(hv::HeterogenousVector{T, S}) where {S, T} = pairs(NamedTuple(hv))
+
+function Base.getindex(hv::HeterogenousVector{T, S}, idx::Int) where {T, S}
     current_idx = 1
-    for (name, field) in pairs(hv.x)
+    for (name, field) in pairs(hv)
         unwrapped_field = _unwrap(field)
         if unwrapped_field isa AbstractArray
             field_length = length(unwrapped_field)
@@ -101,9 +102,9 @@ function Base.getindex(hv::HeterogenousVector{T}, idx::Int) where {T}
     throw(BoundsError(hv, idx))
 end
 
-function Base.setindex!(hv::HeterogenousVector{T}, val, idx::Int) where {T}
+function Base.setindex!(hv::HeterogenousVector{T, S}, val, idx::Int) where {T, S}
     current_idx = 1
-    for (name, field) in pairs(hv.x)
+    for (name, field) in pairs(hv)
         if field isa AbstractArray
             field_length = length(field)
             if current_idx <= idx < current_idx + field_length
@@ -127,7 +128,7 @@ end
 _field_length(field::Ref) = 1
 _field_length(field::AbstractArray) = length(field)
 # Update length calculation
-Base.length(hv::HeterogenousVector) = sum(_field_length, hv.x)
+Base.length(hv::HeterogenousVector) = sum(_field_length, NamedTuple(hv))
 
 Base.size(hv::HeterogenousVector) = (length(hv),)
 Base.firstindex(hv::HeterogenousVector) = 1
@@ -136,7 +137,7 @@ Base.lastindex(hv::HeterogenousVector) = length(hv)
 _copy_field(field::Ref) = _unwrap(field) |> Ref
 _copy_field(field::AbstractArray) = copy(field)
 function Base.copy(hv::HeterogenousVector)
-    copied_x = map(_copy_field, hv.x)
+    copied_x = map(_copy_field, NamedTuple(hv))
     HeterogenousVector(copied_x)
 end
 
@@ -146,13 +147,13 @@ _copy_field!(dst::Ref, src::Ref) = _set_value!(dst, _unwrap(src))
 _copy_field!(dst::AbstractArray, src::AbstractArray) = copy!(dst, src)
 function Base.copyto!(dst::HeterogenousVector, src::HeterogenousVector)
     # Ensure both have the same structure
-    if keys(dst.x) != keys(src.x)
+    if propertynames(dst) != propertynames(src)
         throw(ArgumentError("HeterogenousVectors must have the same field names"))
     end
     
-    for name in keys(dst.x)
-        src_field = getfield(src.x, name)
-        dst_field = getfield(dst.x, name)
+    for name in propertynames(dst)
+        src_field = getfield(NamedTuple(src), name)
+        dst_field = getfield(NamedTuple(dst), name)
         
         _copy_field!(dst_field, src_field)
     end
@@ -166,12 +167,12 @@ Base.similar(x::Ref) = zero(x)
 Base.similar(x::Ref,::Type{ElType}) where {ElType} = Ref(zero(ElType))
 
 function Base.similar(hv::HeterogenousVector{T}) where {T}
-    similar_x = map(similar, hv.x)
+    similar_x = map(similar, NamedTuple(hv))
     HeterogenousVector(similar_x)
 end
 
 function Base.zero(hv::HeterogenousVector)
-    zero_x = map(zero, hv.x)
+    zero_x = map(zero, NamedTuple(hv))
     HeterogenousVector(zero_x)
 end
 
@@ -207,7 +208,7 @@ end
 
 function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector{Names}}}, ::Type{ElType}) where {Names, ElType}
     hv = find_heterogenous_vector(bc)
-    similar_x = map(hv.x) do field
+    similar_x = map(NamedTuple(hv)) do field
         similar(field, ElType)
     end
     HeterogenousVector(similar_x)
@@ -216,7 +217,7 @@ end
 
 # Using generated functions here really helps performance
 @generated unpack_args(x::Any,::Symbol) = :(x)
-@generated unpack_args(x::HeterogenousVector, field::Symbol) = :(getfield(x.x, field) |> _unwrap)
+@generated unpack_args(x::HeterogenousVector, field::Symbol) = :(getproperty(x, field))
 @generated unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector{Names}}}, field::Symbol) where {Names} = :(Broadcast.broadcasted(x.f,unpack_args(x.args,field)...))
 @generated unpack_args(::Tuple{}, ::Symbol) = :()
 @generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
@@ -255,7 +256,7 @@ end
     # benchmarking has shown there are cases where this does not happen (even with aggressive const propagation),
     # causing type unstability and costly runtime dispatch
     function map_fun(::Val{name}) where {name}
-        target_field = getfield(dest.x, name)
+        target_field = getfield(NamedTuple(dest), name)
         copyto_field_res!(target_field, f, args, name)
     end
     map(map_fun, Val.(Names))
@@ -283,7 +284,7 @@ end
     hv = find_heterogenous_vector(bc)
     # Points to the first index of the destination array
     dest_idx = firstindex(dest)
-    segment_ranges = _compute_segment_ranges(hv.x)
+    segment_ranges = _compute_segment_ranges(NamedTuple(hv))
     function map_fun(::Val{name}) where {name}
         unpacked_args = unpack_args(args, name)
         segment_range = segment_ranges[name]
@@ -297,7 +298,7 @@ end
 
 # Show methods for HeterogenousVector
 Base.summary(hv::HeterogenousVector) = string(typeof(hv), " with members:")
-Base.show(io::IO, m::MIME"text/plain", hv::HeterogenousVector) = show(io, m, hv.x)
+Base.show(io::IO, m::MIME"text/plain", hv::HeterogenousVector) = show(io, m, NamedTuple(hv))
 
 # Copy-catted from RecursiveArrayTools.jl/src/utils.jl
 # From Iterators.jl. Moved here since Iterators.jl is not precompile safe anymore.
@@ -355,5 +356,5 @@ function Base.iterate(it::Chain, state)
     return xs_state[1], (i, xs_state[2])
 end
 
-Base.iterate(x::HeterogenousVector) = iterate(Chain(values(x.x)))
-Base.iterate(x::HeterogenousVector, state) = iterate(Chain(values(x.x)), state)
+Base.iterate(x::HeterogenousVector) = iterate(Chain(values(NamedTuple(x))))
+Base.iterate(x::HeterogenousVector, state) = iterate(Chain(values(NamedTuple(x))), state)
