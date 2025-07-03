@@ -19,8 +19,8 @@ Value(x::Unitful.AbstractQuantity) = x.val
 _make_mutable(x::AbstractArray) = x
 _make_mutable(x::Ref) = x
 _make_mutable(x) = Ref(x)
-_unwrap(x::Ref) = x[]
-_unwrap(x) = x
+@generated _unwrap(x::Ref) = :(x[])
+@generated _unwrap(x) = :x
 _set_value!(x::Ref, val) = (x[] = val)
 _set_value!(x::AbstractArray, val::AbstractArray) = copy!(x,val)
 _set_value!(x::AbstractArray, val, idx) = (x[idx] = val)
@@ -49,14 +49,12 @@ struct HeterogenousVector{T, S <: NamedTuple} <: AbstractVector{T}
     end
 end
 
-function NamedTuple(hv::HeterogenousVector)
-    return getfield(hv, :x)
-end
+@generated NamedTuple(hv::HeterogenousVector) = :(getfield(hv, :x))
 
 # Custom property access for clean external interface
 # Note: For accessing the named tuple field x, we must use getfield or invoking NamedTuple
-function Base.getproperty(hv::HeterogenousVector, name::Symbol)
-    if haskey(NamedTuple(hv), name)
+@inline Base.@constprop :aggressive function Base.getproperty(hv::HeterogenousVector, name::Symbol)
+    if name in propertynames(hv)
         #  Access field and unwrap if it's a Ref
         field = getfield(NamedTuple(hv), name)
         return _unwrap(field)
@@ -65,8 +63,8 @@ function Base.getproperty(hv::HeterogenousVector, name::Symbol)
     end
 end
 
-function Base.setproperty!(hv::HeterogenousVector, name::Symbol, value)
-    if haskey(NamedTuple(hv), name)
+@inline Base.@constprop :aggressive function Base.setproperty!(hv::HeterogenousVector, name::Symbol, value)
+    if name in propertynames(hv)
         # Set field value, wrapping in Ref if it's a scalar
         field = getfield(NamedTuple(hv), name)
         _set_value!(field, value)
@@ -76,9 +74,7 @@ function Base.setproperty!(hv::HeterogenousVector, name::Symbol, value)
 end
 
 
-function Base.propertynames(hv::HeterogenousVector)
-    return keys(NamedTuple(hv))
-end
+@generated Base.propertynames(::HeterogenousVector{T, S}) where {T, S} = :(fieldnames(S))
 
 Base.pairs(hv::HeterogenousVector{T, S}) where {S, T} = pairs(NamedTuple(hv))
 
