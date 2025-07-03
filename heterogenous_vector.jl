@@ -81,8 +81,6 @@ function Base.propertynames(hv::HeterogenousVector)
     return keys(hv.x)
 end
 
-
-
 function Base.getindex(hv::HeterogenousVector{T}, idx::Int) where {T}
     current_idx = 1
     for (name, field) in pairs(hv.x)
@@ -165,6 +163,7 @@ Base.copy!(dst::HeterogenousVector, src::HeterogenousVector) = Base.copyto!(dst,
 
 Base.zero(x::Ref) = _unwrap(x) |> zero
 Base.similar(x::Ref) = zero(x)
+Base.similar(x::Ref,::Type{ElType}) where {ElType} = Ref(zero(ElType))
 
 function Base.similar(hv::HeterogenousVector{T}) where {T}
     similar_x = map(similar, hv.x)
@@ -177,28 +176,48 @@ function Base.zero(hv::HeterogenousVector)
 end
 
 # Broadcasting support for HeterogenousVector
-Base.BroadcastStyle(::Type{<:HeterogenousVector}) = Broadcast.Style{HeterogenousVector}()
-Base.BroadcastStyle(::Broadcast.Style{HeterogenousVector}, ::Base.Broadcast.BroadcastStyle) = Broadcast.Style{HeterogenousVector}()
+Base.BroadcastStyle(::Type{<:HeterogenousVector{T, S}}) where {T, S} = Broadcast.Style{HeterogenousVector{fieldnames(S)}}()
 
+function Base.BroadcastStyle(::Broadcast.Style{HeterogenousVector{Names1}}, ::Broadcast.Style{HeterogenousVector{Names2}}) where {Names1, Names2} 
+    error("Cannot broadcast HeterogenousVectors with different field names: $(Names1) vs $(Names2)")
+end
+
+function Base.BroadcastStyle(::Broadcast.Style{HeterogenousVector{Names}}, ::Broadcast.Style{HeterogenousVector{Names}}) where {Names} 
+    Broadcast.Style{HeterogenousVector{Names}}()
+end
+
+# HeterogenousVector style takes precedence over other broadcast styles
+function Base.BroadcastStyle(::Broadcast.Style{HeterogenousVector{Names}}, ::Base.Broadcast.BroadcastStyle) where {Names}
+    Broadcast.Style{HeterogenousVector{Names}}()
+end
 
 # Helper function to find HeterogenousVector in broadcast arguments
 find_heterogenous_vector(bc::Base.Broadcast.Broadcasted) = find_heterogenous_vector(bc.args)
 find_heterogenous_vector(args::Tuple) = find_heterogenous_vector(find_heterogenous_vector(args[1]), Base.tail(args))
+find_heterogenous_vector(x::Base.Broadcast.Extruded) = x.x
 find_heterogenous_vector(x) = x
 find_heterogenous_vector(::Tuple{}) = nothing
 find_heterogenous_vector(x::HeterogenousVector, rest) = x
 find_heterogenous_vector(::Any, rest) = find_heterogenous_vector(rest)
 
-function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
+function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector{Names}}}) where {Names}
     hv = find_heterogenous_vector(bc)
     similar(hv)
+end
+
+function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector{Names}}}, ::Type{ElType}) where {Names, ElType}
+    hv = find_heterogenous_vector(bc)
+    similar_x = map(hv.x) do field
+        similar(field, ElType)
+    end
+    HeterogenousVector(similar_x)
 end
 
 
 # Using generated functions here really helps performance
 @generated unpack_args(x::Any,::Symbol) = :(x)
 @generated unpack_args(x::HeterogenousVector, field::Symbol) = :(getfield(x.x, field) |> _unwrap)
-@generated unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}}, field::Symbol) = :(Broadcast.broadcasted(x.f,unpack_args(x.args,field)...))
+@generated unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector{Names}}}, field::Symbol) where {Names} = :(Broadcast.broadcasted(x.f,unpack_args(x.args,field)...))
 @generated unpack_args(::Tuple{}, ::Symbol) = :()
 @generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
 
@@ -215,22 +234,22 @@ end
 
 
 # Broadcasting implementation
-function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
-    hv = find_heterogenous_vector(bc)
+function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector{Names}}}) where {Names}
     f = bc.f
     args = bc.args
-    
     # Apply broadcast to each field
-    res_args = map(keys(hv.x)) do name
+    res_args = map(Names) do name
         get_field_res(f,args, name)
     end
-    HeterogenousVector(NamedTuple{keys(hv.x)}(res_args))
+    HeterogenousVector(NamedTuple{Names}(res_args))
 end
 
-@inline Base.@constprop :aggressive function Base.copyto!(dest::HeterogenousVector,bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}, Axes, F, Args}) where {Axes,F,Args<:Tuple}
+@inline Base.@constprop :aggressive function Base.copyto!(dest::HeterogenousVector{T, S},bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector{Names}}, Axes, F, Args}) where {T, S, Names, Axes,F,Args<:Tuple}
+    if fieldnames(S) != Names
+        throw(ArgumentError("Cannot copy to HeterogenousVector with different field names: $(fieldnames(S)) vs $(Names)"))
+    end
     f = bc.f
     args = bc.args
-    key_names = keys(dest.x)
     # Using value types to specialize map_fun is indeed an ugly solution
     # Constant propagation should **usually** make this unnecessary, but
     # benchmarking has shown there are cases where this does not happen (even with aggressive const propagation),
@@ -239,7 +258,7 @@ end
         target_field = getfield(dest.x, name)
         copyto_field_res!(target_field, f, args, name)
     end
-    map(map_fun, Val.(key_names))
+    map(map_fun, Val.(Names))
     dest
 end
 
@@ -258,20 +277,20 @@ end
 
 
 # Written specifically to deal with cases such as calculate_residuals!() where the destination is an ordinary Array
-@inline Base.@constprop :aggressive function Base.copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector}})
+@inline Base.@constprop :aggressive function Base.copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogenousVector{Names}}}) where {Names}
     f = bc.f
     args = bc.args
     hv = find_heterogenous_vector(bc)
-    S = typeof(hv.x)
     # Points to the first index of the destination array
     dest_idx = firstindex(dest)
     segment_ranges = _compute_segment_ranges(hv.x)
-    map(fieldnames(S)) do name
+    function map_fun(::Val{name}) where {name}
         unpacked_args = unpack_args(args, name)
         segment_range = segment_ranges[name]
         dest_segment = view(dest, dest_idx .+ segment_range)
         dest_segment .= f.(unpacked_args...)
     end
+    map(map_fun, Val.(Names))
     return dest
 end
 
@@ -279,3 +298,62 @@ end
 # Show methods for HeterogenousVector
 Base.summary(hv::HeterogenousVector) = string(typeof(hv), " with members:")
 Base.show(io::IO, m::MIME"text/plain", hv::HeterogenousVector) = show(io, m, hv.x)
+
+# Copy-catted from RecursiveArrayTools.jl/src/utils.jl
+# From Iterators.jl. Moved here since Iterators.jl is not precompile safe anymore.
+
+# Concatenate the output of n iterators
+struct Chain{T <: Tuple}
+    xss::T
+end
+
+# iteratorsize method defined at bottom because of how @generated functions work in 0.6 now
+
+"""
+    chain(xs...)
+
+Iterate through any number of iterators in sequence.
+
+```jldoctest
+julia> for i in chain(1:3, ['a', 'b', 'c'])
+           @show i
+       end
+i = 1
+i = 2
+i = 3
+i = 'a'
+i = 'b'
+i = 'c'
+```
+"""
+chain(xss...) = Chain(xss)
+
+Base.length(it::Chain{Tuple{}}) = 0
+Base.length(it::Chain) = sum(length, it.xss)
+
+Base.eltype(::Type{Chain{T}}) where {T} = typejoin([eltype(t) for t in T.parameters]...)
+
+function Base.iterate(it::Chain)
+    i = 1
+    xs_state = nothing
+    while i <= length(it.xss)
+        xs_state = iterate(it.xss[i])
+        xs_state !== nothing && return xs_state[1], (i, xs_state[2])
+        i += 1
+    end
+    return nothing
+end
+
+function Base.iterate(it::Chain, state)
+    i, xs_state = state
+    xs_state = iterate(it.xss[i], xs_state)
+    while xs_state == nothing
+        i += 1
+        i > length(it.xss) && return nothing
+        xs_state = iterate(it.xss[i])
+    end
+    return xs_state[1], (i, xs_state[2])
+end
+
+Base.iterate(x::HeterogenousVector) = iterate(Chain(values(x.x)))
+Base.iterate(x::HeterogenousVector, state) = iterate(Chain(values(x.x)), state)

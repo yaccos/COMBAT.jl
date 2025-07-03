@@ -11,3 +11,4 @@ end
 
 val = create_simulation_variables()
 val_copy = RecursiveArrayTools.recursivecopy(val)
+find_heterogenous_vector(x::Base.Broadcast.Extruded) = x.x
