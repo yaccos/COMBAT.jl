@@ -47,24 +47,24 @@ function ode_system!(du, u, p, t)
     # Translates between the B array indicies and the number of antibiotic molecules bound in each compartment
     # This is an abstraction intended to avoid off-by-one index errors and support both one and zero indexed versions
     # of arrays
-    @inline bound_target_number = x -> x - index_start
-    @inline free_target_number = x -> p.n - (x - index_start)
+    bound_target_number = @inline  x -> x - index_start
+    free_target_number = @inline  x -> p.n - (x - index_start)
 
     
 
     # Compartment-wise rates 
-    @inline binding_rate = x -> binding_coefficient * free_target_number(x) * A * B[x]
-    @inline unbinding_rate = x -> p.k_r * bound_target_number(x) * B[x]
-    @inline division_rate = x -> p.r_x[x]*B[x]*carrying_coefficient
-    @inline death_rate = x -> p.d_x[x]*B[x]*carrying_coefficient
+    binding_rate = @inline  x -> binding_coefficient * free_target_number(x) * A * B[x]
+    unbinding_rate =  @inline x -> p.k_r * bound_target_number(x) * B[x]
+    division_rate = @inline x -> p.r_x[x]*B[x]*carrying_coefficient
+    death_rate = @inline x -> p.d_x[x]*B[x]*carrying_coefficient
     
-    @inline dB_fun = x -> binding_rate(x-1) - unbinding_rate(x) - binding_rate(x) + unbinding_rate(x+1) -
+    dB_fun = @inline x -> binding_rate(x-1) - unbinding_rate(x) - binding_rate(x) + unbinding_rate(x+1) -
      division_rate(x)- death_rate(x)
     # For the beginning and end of the B array, we must have custom assignment in order to avoid
     # index-out-of-bounds errors
     dB[begin] =  -binding_rate(index_start) + unbinding_rate(index_start+1) -
      division_rate(index_start) - death_rate(index_start)
-    dB[begin+1:end-1] .= dB_fun.(index_start+1:index_end-1)
+    dB[index_start+1:index_end-1] .= dB_fun.(index_start+1:index_end-1)
     dB[end] = binding_rate(index_end-1) -
      unbinding_rate(index_end) -
      division_rate(index_end) - death_rate(index_end)
