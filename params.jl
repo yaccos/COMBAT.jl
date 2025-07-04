@@ -2,7 +2,7 @@ using PhysicalConstants.CODATA2018
 using Distributions
 using LinearAlgebra
 using Unitful
-include("heterogenous_vector.jl")
+include("heterogeneous_vector.jl")
 
 @refunit cell "cell" Cells Unitful.𝐍 false
 

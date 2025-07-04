@@ -3,7 +3,7 @@ using Unitful
 using DifferentialEquations
 using BenchmarkTools
 using Revise
-include("heterogenous_vector.jl")
+include("heterogeneous_vector.jl")
 include("params.jl")
 
 # Initial conditions
@@ -15,7 +15,7 @@ function initialize_system(params)
     B_0 = params.B_0
     B_start = zeros(typeof(B_0),params.n+1)
     B_start[1] = B_0
-    HeterogenousVector(A=A_0,T=T_0,AT=AT_0,B=B_start)
+    HeterogeneousVector(A=A_0,T=T_0,AT=AT_0,B=B_start)
 end
 
 u0 = initialize_system(model_params)
