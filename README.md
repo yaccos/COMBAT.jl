@@ -3,3 +3,27 @@
 This repository implements a type named `HeterogeneousVector` which is a segmented array type which can hold components of different concrete type while still supporting efficient type-stable broadcasting. Its components can either be other arrays or scalars. Note that the elements are mutable even if they are scalars, meaning that operations like: `x.a += 2.5` do work as intended. This type is similar to `NamedArrayPartition` from [RecursiveArrayTools.jl](https://docs.sciml.ai/RecursiveArrayTools), the key differences being supporting heterogeneous components and mutable scalar components.
 
 This data type is used in a realistic example simulating the COMBAT model for antibotic action provided in `core_model.jl`. This model is derived from Tran, Vi Ngoc-Nha _et al._ 2022 (https://doi.org/10.1186/s12859-021-04536-3) and Wiesch, P Abel zur et al. 2015 (https://doi.org/10.1126/scitranslmed.aaa8760). In this example, we use `Unitful` quantities to keep track of the units of measurement of the system variables and the parameters and simulate the system with `DifferentialEquations`s solver `RK4`. Doing this in an efficient and user-friendly manner requires us to use a structure like `HeterogeneousVector`.
+
+## Running the notebook
+The Pluto notebook `equation_dimensions.jl` takes a deep dive into the dimensionality of the COMBAT equations and highlights a dimension error in the original COMBAT model which was originally discovered when simulating the system with `Unitful` quantities. To open the notebook, launch Pluto by running
+```Julia
+using Pluto
+Pluto.run()
+```
+
+Note that the notebook uses commands from the MathJax extension `cases`. If you really want to show these correctly, please change the properties:
+```js
+window.MathJax = {
+loader: {load: ['[tex]/cases']},
+tex: {
+            inlineMath: [
+                ["$", "$"],
+                ["\\(", "\\)"],
+            ],
+            packages: {'[+]': ['cases']},
+
+        }
+}
+```
+in the `SetupMathJax.js` file of the Pluto installation (it is not particulary easy, I know). Otherwise, you can change the parts of the notebook between `begin{cases}` and `end{cases}` with a more primitive, but supported TeX expression.
+
