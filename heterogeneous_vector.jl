@@ -1,7 +1,8 @@
 using Unitful
 using Revise
 import RecursiveArrayTools
-import Base.zero
+using DataStructures
+
 
 
 # Copy-catted from DiffEqBase DiffEqBaseUnitfulExt.jl
@@ -223,6 +224,43 @@ end
 @generated unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{HeterogeneousVector{Names}}}, field::Symbol) where {Names} = :(Broadcast.broadcasted(x.f,unpack_args(x.args,field)...))
 @generated unpack_args(::Tuple{}, ::Symbol) = :()
 @generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
+
+mutable struct BcInfo{BcType} where {BcType <: Broadcast.Broadcasted}
+    bc::BcType
+    base_idx::Int
+    # The fields below are the only field we really want to be mutable
+    current_arg::Int
+    res_args::Queue
+end
+
+@generated function unpack_broadcast(bc, field)
+    BcType = typeof(bc)
+    bc_stack = Stack{BcInfo{BcType}}()
+    res_list = MutableLinkedList{Any}()
+    push!(bc_stack, BcInfo(bc, 1, 0))
+    push!(res_list, bc)
+    while !is.empty(bc_stack)
+        bc_info = first(bc_stack)
+        bc = bc_info.bc
+        base_idx = bc_info.base_idx
+        args = bc.args
+        nargs = length(args)
+        arg_idx = base_idx
+        while bc_info.current_arg < nargs
+            bc_info.current_arg += 1
+            arg_idx += 1
+            arg = args[current_arg]
+            if arg isa HeterogeneousVector
+                arg = getproperty(arg, field)
+                push!(res_list, arg)
+            elseif arg isa BcType
+                push!(bc_stack, BcInfo(arg, arg_idx))
+            end
+            push!(res_list, arg)
+        end
+    end
+    pop!(res_list)
+end
 
 # The constant propagation is appearently important to ensure type stability
 # Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield
