@@ -92,7 +92,8 @@ end
 problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_span),model_params)
 
 # Does not work as autodiff is not yet supported
-# sol = solve(problem,AutoTsit5(Rosenbrock23()))
+using SciMLSensitivity, ForwardDiff
+sol = solve(problem,AutoTsit5(Rosenbrock23()))
 
 sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)

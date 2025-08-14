@@ -167,9 +167,24 @@ function Base.similar(hv::HeterogeneousVector{T}) where {T}
     HeterogeneousVector(similar_x)
 end
 
+function Base.similar(hv::HeterogeneousVector, ::Type{ElType}) where {ElType}
+    new_hv = map(NamedTuple(hv)) do field
+        similar(field, ElType)
+    end
+    HeterogeneousVector(new_hv)
+end
+
 function Base.zero(hv::HeterogeneousVector)
     zero_x = map(zero, NamedTuple(hv))
     HeterogeneousVector(zero_x)
+end
+
+function Base.zero(hv::HeterogeneousVector, ::Type{ElType}) where {ElType}
+    map_fun(field::AbstractArray) = fill!(similar(field, ElType))
+    # For scalar fields
+    map_fun(field) = Ref(zero(ElType))
+    new_hv = map(map_fun, NamedTuple(hv))
+    HeterogeneousVector(new_hv)
 end
 
 # Broadcasting support for HeterogeneousVector
