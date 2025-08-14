@@ -158,17 +158,23 @@ end
 
 Base.copy!(dst::HeterogeneousVector, src::HeterogeneousVector) = Base.copyto!(dst, src)
 
-Base.zero(x::Ref) = _unwrap(x) |> zero
-Base.similar(x::Ref) = zero(x)
-Base.similar(x::Ref,::Type{ElType}) where {ElType} = Ref(zero(ElType))
+_zero_field(field::Ref) = Ref(zero(_unwrap(field)))
+_zero_field(field::AbstractArray) = zero(field)
+
+_similar_field(field::Ref) = Ref(zero(_unwrap(field)))
+_similar_field(field::AbstractArray) = similar(field)
+
+_similar_field(field::Ref, ::Type{ElType}) where {ElType} = Ref(zero(ElType))
+_similar_field(field::AbstractArray, ::Type{ElType}) where {ElType} = similar(field, ElType)
+
 
 function Base.similar(hv::HeterogeneousVector{T}) where {T}
-    similar_x = map(similar, NamedTuple(hv))
+    similar_x = map(_zero_field, NamedTuple(hv))
     HeterogeneousVector(similar_x)
 end
 
 function Base.zero(hv::HeterogeneousVector)
-    zero_x = map(zero, NamedTuple(hv))
+    zero_x = map(_zero_field, NamedTuple(hv))
     HeterogeneousVector(zero_x)
 end
 
@@ -205,7 +211,7 @@ end
 function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogeneousVector{Names}}}, ::Type{ElType}) where {Names, ElType}
     hv = find_heterogeneous_vector(bc)
     similar_x = map(NamedTuple(hv)) do field
-        similar(field, ElType)
+        _similar_field(field, ElType)
     end
     HeterogeneousVector(similar_x)
 end
