@@ -4,7 +4,6 @@ authors = ["Jakob Peder Pettersen <jakob.p.pettersen@uit.no>"]
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Cthulhu = "f68482b8-f384-11e8-15f7-abe071a5a75f"
-DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 PhysicalConstants = "5ad8b20f-a522-5ce9-bfc9-ddf1d5bda6ab"

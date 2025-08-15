@@ -1,7 +1,6 @@
 using Unitful
 using Revise
 import RecursiveArrayTools
-using DataStructures
 
 
 
@@ -225,41 +224,57 @@ end
 @generated unpack_args(::Tuple{}, ::Symbol) = :()
 @generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
 
-mutable struct BcInfo{BcType} where {BcType <: Broadcast.Broadcasted}
+mutable struct BcInfo{BcType <: Broadcast.Broadcasted}
+    # This field does not need to be mutable
     bc::BcType
-    base_idx::Int
-    # The fields below are the only field we really want to be mutable
     current_arg::Int
-    res_args::Queue
+    res_args::Vector{Any}
+    function BcInfo(x::Broadcast.Broadcasted)
+        new{BcType}(bc, 0, Vector{Any}())
+    end
 end
 
-@generated function unpack_broadcast(bc, field)
+function unpack_broadcast(bc, field)
     BcType = typeof(bc)
-    bc_stack = Stack{BcInfo{BcType}}()
-    res_list = MutableLinkedList{Any}()
-    push!(bc_stack, BcInfo(bc, 1, 0))
-    push!(res_list, bc)
-    while !is.empty(bc_stack)
-        bc_info = first(bc_stack)
+    bc_stack = Vector{BcInfo{BcType}}()
+    push!(bc_stack, BcInfo(bc))
+    res_broadcast = nothing # We must declare this variable here in order to see changes after exiting 
+    while !isempty(bc_stack)
+        bc_info = pop!(bc_stack)
         bc = bc_info.bc
-        base_idx = bc_info.base_idx
+        res = bc_info.res_args
+        if !(res_broadcast isa Nothing)
+            # Adds the result from the child broadcast if it exists
+            push!(res, res_broadcast)
+        end
         args = bc.args
         nargs = length(args)
-        arg_idx = base_idx
+        # A flag on whether we should jump back to the beginning of the loop
+        # Needed because Julia does not support while-else, nor break statements for outer loops
+        arg_is_bc = false
         while bc_info.current_arg < nargs
             bc_info.current_arg += 1
-            arg_idx += 1
-            arg = args[current_arg]
-            if arg isa HeterogeneousVector
+            arg = args[current_arg]    
+            if arg isa BcType
+                # A new broadcast is found
+                # We first readd the old broadcast to the stack
+                push!(bc_stack, bc_info)
+                # and then the new one
+                push!(bc_stack, BcInfo(arg))
+                arg_is_bc = true
+                break
+            elseif arg isa HeterogeneousVector
                 arg = getproperty(arg, field)
-                push!(res_list, arg)
-            elseif arg isa BcType
-                push!(bc_stack, BcInfo(arg, arg_idx))
+                push!(bc_stack, BcInfo(arg))
             end
-            push!(res_list, arg)
+            push!(res, arg)
         end
+        # In case we have encountered a new broadcast, we start the process over again
+        # one level deeper
+        # Otherwise, we are done handling the arguments and construct the resulting broadcast
+        arg_is_bc ? nothing : Broadcast.Broadcasted(bc.f, Tuple(res))
     end
-    pop!(res_list)
+    return res_broadcast
 end
 
 # The constant propagation is appearently important to ensure type stability
