@@ -281,16 +281,16 @@ end
 # Using the low-level functions Broadcast.broadcasted or Broadcast.Broadcasted incur considerable
 # overhead due to some oddities in the Julia compiler when the arg tuple is not a bitset
 # This one is for copies and immutable fields
-@generated get_field_res(f, args::Tuple, field::Symbol) = :(broadcast(f,unpack_args(args, field)...))
+# @generated get_field_res(f, args::Tuple, field::Symbol) = :(broadcast(f,unpack_args(args, field)...))
 # This one is for copying to a mutable field
 @generated copyto_field_res!(dest::AbstractArray, f, args::Tuple, field::Symbol) = :(dest .= f.(unpack_args(args, field)...))
-@generated copyto_field_res!(dest::Ref, f, args::Tuple, field::Symbol) = :(dest[] = f.(unpack_args(args, field)...))
+@generated copyto_field_res!(dest::Ref, f, args::Tuple, field::Symbol) = :(dest[] =
+
+f.(unpack_args(args, field)...))
 
 
 # Broadcasting implementation
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogeneousVector{Names}}}) where {Names}
-    f = bc.f
-    args = bc.args
     # Apply broadcast to each field
     res_args = map(Names) do name
         Broadcast.materialize(unpack_broadcast(bc, name))
@@ -310,7 +310,12 @@ end
     # causing type unstability and costly runtime dispatch
     function map_fun(::Val{name}) where {name}
         target_field = getfield(NamedTuple(dest), name)
-        copyto_field_res!(target_field, f, args, name)
+        bc_unpacked = unpack_broadcast(bc, name)
+        if target_field isa Ref
+            target_field[] = Broadcast.materialize(bc_unpacked)
+        else
+            Broadcast.materialize!(target_field, bc_unpacked)
+        end
     end
     map(map_fun, Val.(Names))
     dest
