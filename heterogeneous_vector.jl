@@ -224,21 +224,20 @@ end
 @generated unpack_args(::Tuple{}, ::Symbol) = :()
 @generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
 
-mutable struct BcInfo{BcType <: Broadcast.Broadcasted}
+mutable struct BcInfo{BcStyle <: Broadcast.BroadcastStyle}
     # This field does not need to be mutable
-    bc::BcType
+    bc::Broadcast.Broadcasted{BcStyle}
     current_arg::Int
     res_args::Vector{Any}
-    function BcInfo(x::Broadcast.Broadcasted)
-        new{BcType}(bc, 0, Vector{Any}())
+    function BcInfo(x::Broadcast.Broadcasted{BcStyle}) where {BcStyle}
+        new{BcStyle}(x, 0, Vector{Any}())
     end
 end
 
-function unpack_broadcast(bc, field)
-    BcType = typeof(bc)
-    bc_stack = Vector{BcInfo{BcType}}()
+function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle}, field) where {BcStyle}
+    bc_stack = Vector{BcInfo{BcStyle}}()
     push!(bc_stack, BcInfo(bc))
-    res_broadcast = nothing # We must declare this variable here in order to see changes after exiting 
+    res_broadcast = nothing # We must declare this variable here in order to see changes after exiting the loop 
     while !isempty(bc_stack)
         bc_info = pop!(bc_stack)
         bc = bc_info.bc
@@ -254,8 +253,8 @@ function unpack_broadcast(bc, field)
         arg_is_bc = false
         while bc_info.current_arg < nargs
             bc_info.current_arg += 1
-            arg = args[current_arg]    
-            if arg isa BcType
+            arg = args[bc_info.current_arg]    
+            if arg isa Broadcast.Broadcasted{BcStyle}
                 # A new broadcast is found
                 # We first readd the old broadcast to the stack
                 push!(bc_stack, bc_info)
@@ -265,14 +264,13 @@ function unpack_broadcast(bc, field)
                 break
             elseif arg isa HeterogeneousVector
                 arg = getproperty(arg, field)
-                push!(bc_stack, BcInfo(arg))
             end
             push!(res, arg)
         end
         # In case we have encountered a new broadcast, we start the process over again
         # one level deeper
         # Otherwise, we are done handling the arguments and construct the resulting broadcast
-        arg_is_bc ? nothing : Broadcast.Broadcasted(bc.f, Tuple(res))
+        res_broadcast = arg_is_bc ? nothing : Broadcast.Broadcasted(bc.f, Tuple(res))
     end
     return res_broadcast
 end
@@ -295,7 +293,7 @@ function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogeneousVector
     args = bc.args
     # Apply broadcast to each field
     res_args = map(Names) do name
-        get_field_res(f,args, name)
+        Broadcast.materialize(unpack_broadcast(bc, name))
     end
     HeterogeneousVector(NamedTuple{Names}(res_args))
 end
