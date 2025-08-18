@@ -224,26 +224,26 @@ end
 @generated unpack_args(::Tuple{}, ::Symbol) = :()
 @generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
 
-mutable struct BcInfo{BcStyle <: Broadcast.BroadcastStyle}
+mutable struct BcInfoRuntime{BcStyle <: Broadcast.BroadcastStyle}
     args::Tuple # Actual args, available on runtime, but not compile-time
     f::Function
     Args::DataType # Structure of arguments, available both on runtime and compile-time
     # Only the two last fields need to be mutable
     current_arg::Int
     res_args::Vector{Any}
-    function BcInfo(args::Tuple,BcStyle, F, Args)
+    function BcInfoRuntime(args::Tuple,BcStyle, F, Args)
         # No need for storing Axes, it is basically a placeholder for obtaining the other type parameters
         new{BcStyle}(args, F.instance, Args, 0, Vector{Any}())
     end
-    function BcInfo(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}) where {BcStyle, Axes, F, Args}
+    function BcInfoRuntime(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}) where {BcStyle, Axes, F, Args}
         new{BcStyle}(bc.args, F.instance, Args, 0, Vector{Any}())
     end
 end
 
-function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, field) where {BcStyle, Axes, F, Args}
-    bc_stack = Vector{BcInfo{BcStyle}}()
+function unpack_broadcast_runtime(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, field) where {BcStyle, Axes, F, Args}
+    bc_stack = Vector{BcInfoRuntime{BcStyle}}()
     # push!(bc_stack, BcInfo(bc.args, BcStyle, F, Args))
-    push!(bc_stack, BcInfo(bc))
+    push!(bc_stack, BcInfoRuntime(bc))
     res_broadcast = nothing # We must declare this variable here in order to see changes after exiting the loop 
     while !isempty(bc_stack)
         bc_info = pop!(bc_stack)
@@ -265,7 +265,7 @@ function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, fie
                 # We first readd the old broadcast to the stack
                 push!(bc_stack, bc_info)
                 # and then the new one
-                push!(bc_stack, BcInfo(arg))
+                push!(bc_stack, BcInfoRuntime(arg))
                 arg_is_bc = true
                 break
             elseif arg isa HeterogeneousVector
@@ -281,6 +281,74 @@ function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, fie
     return res_broadcast
 end
 
+mutable struct BcInfo{BcStyle <: Broadcast.BroadcastStyle}
+    f::Function
+    Args::DataType # Structure of arguments, available both on runtime and compile-time
+    # The expression needed to evaluated to get to the current node from the root broadcast to unpack
+    expr::Expr
+    # Only the two last fields need to be mutable
+    current_arg::Int
+    res_args::Vector{Expr}
+    function BcInfo(BcStyle, F, Args, expr)
+        # No need for storing Axes, it is basically a placeholder for obtaining the other type parameters
+        new{BcStyle}(F.instance, Args, expr, 0, Vector{Any}())
+    end
+    function BcInfo(T::DataType, expr)
+        BcStyle, Axes, F, Args = T.parameters
+        new{BcStyle}(F.instance, Args, expr, 0, Vector{Any}())
+    end
+
+end
+
+@generated function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, ::Val{field}) where {BcStyle, Axes, F, Args, field <: Symbol}
+    # Defines some constants
+    generate_info(F, Args, arg_path) = BcInfo(BcStyle, F, Args, arg_path)
+    bc_stack = Vector{BcInfo{BcStyle}}()
+    push!(bc_stack, generate_info(F, Args, :bc))
+    res_broadcast = nothing # We must declare this variable here in order to see changes after exiting the loop 
+    while !isempty(bc_stack)
+        bc_info = pop!(bc_stack)
+        expr = bc_info.expr
+        args_expr = :(getfield($ex, :args))
+        res = bc_info.res_args
+        if !(res_broadcast isa Nothing)
+            # Adds the result from the child broadcast if it exists
+            push!(res, res_broadcast)
+        end
+        Args = bc_info.Args
+        nargs = length(args)
+        # A flag on whether we should jump back to the beginning of the loop
+        # Needed because Julia does not support while-else, nor break statements for outer loops
+        arg_is_bc = false
+        while bc_info.current_arg < nargs
+            bc_info.current_arg += 1
+            current_arg_expr = :(getindex($args_expr, $(bc_info.current_arg))) 
+            Arg = Args[bc_info.current_arg]    
+            if Arg <: Broadcast.Broadcasted{BcStyle}
+                # A new broadcast is found
+                # We first readd the old broadcast to the stack
+                push!(bc_stack, bc_info)
+                # then construct the information for the new one
+                new_info = BcInfo(Arg, current_arg_expr)
+                # and then add it to the stack
+                push!(bc_stack, new_info)
+                arg_is_bc = true
+                break
+            end
+            
+            if Arg <: HeterogeneousVector
+                current_arg_expr = :(getproperty($current_arg_expr, $field)) 
+            end
+            push!(res, current_arg_expr)
+        end
+        # In case we have encountered a new broadcast, we start the process over again
+        # one level deeper
+        # Otherwise, we are done handling the arguments and construct the resulting broadcast
+        res_broadcast = arg_is_bc ? nothing : :(Broadcast.Broadcasted(getfield($expr, :f), ($(res...))))
+    end
+    return res_broadcast
+end
+
 # The constant propagation is appearently important to ensure type stability
 # Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield
 
@@ -290,9 +358,7 @@ end
 # @generated get_field_res(f, args::Tuple, field::Symbol) = :(broadcast(f,unpack_args(args, field)...))
 # This one is for copying to a mutable field
 @generated copyto_field_res!(dest::AbstractArray, f, args::Tuple, field::Symbol) = :(dest .= f.(unpack_args(args, field)...))
-@generated copyto_field_res!(dest::Ref, f, args::Tuple, field::Symbol) = :(dest[] =
-
-f.(unpack_args(args, field)...))
+@generated copyto_field_res!(dest::Ref, f, args::Tuple, field::Symbol) = :(dest[] =f.(unpack_args(args, field)...))
 
 
 # Broadcasting implementation
