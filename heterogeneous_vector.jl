@@ -225,28 +225,34 @@ end
 @generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
 
 mutable struct BcInfo{BcStyle <: Broadcast.BroadcastStyle}
-    # This field does not need to be mutable
-    bc::Broadcast.Broadcasted{BcStyle}
+    args::Tuple # Actual args, available on runtime, but not compile-time
+    f::Function
+    Args::DataType # Structure of arguments, available both on runtime and compile-time
+    # Only the two last fields need to be mutable
     current_arg::Int
     res_args::Vector{Any}
-    function BcInfo(x::Broadcast.Broadcasted{BcStyle}) where {BcStyle}
-        new{BcStyle}(x, 0, Vector{Any}())
+    function BcInfo(args::Tuple,BcStyle, F, Args)
+        # No need for storing Axes, it is basically a placeholder for obtaining the other type parameters
+        new{BcStyle}(args, F.instance, Args, 0, Vector{Any}())
+    end
+    function BcInfo(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}) where {BcStyle, Axes, F, Args}
+        new{BcStyle}(bc.args, F.instance, Args, 0, Vector{Any}())
     end
 end
 
-function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle}, field) where {BcStyle}
+function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, field) where {BcStyle, Axes, F, Args}
     bc_stack = Vector{BcInfo{BcStyle}}()
+    # push!(bc_stack, BcInfo(bc.args, BcStyle, F, Args))
     push!(bc_stack, BcInfo(bc))
     res_broadcast = nothing # We must declare this variable here in order to see changes after exiting the loop 
     while !isempty(bc_stack)
         bc_info = pop!(bc_stack)
-        bc = bc_info.bc
         res = bc_info.res_args
         if !(res_broadcast isa Nothing)
             # Adds the result from the child broadcast if it exists
             push!(res, res_broadcast)
         end
-        args = bc.args
+        args = bc_info.args
         nargs = length(args)
         # A flag on whether we should jump back to the beginning of the loop
         # Needed because Julia does not support while-else, nor break statements for outer loops
@@ -270,7 +276,7 @@ function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle}, field) where {BcSt
         # In case we have encountered a new broadcast, we start the process over again
         # one level deeper
         # Otherwise, we are done handling the arguments and construct the resulting broadcast
-        res_broadcast = arg_is_bc ? nothing : Broadcast.Broadcasted(bc.f, Tuple(res))
+        res_broadcast = arg_is_bc ? nothing : Broadcast.Broadcasted(bc_info.f, Tuple(res))
     end
     return res_broadcast
 end
