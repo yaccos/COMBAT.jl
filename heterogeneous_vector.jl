@@ -215,70 +215,6 @@ function Base.similar(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogeneousVec
 end
 
 
-# Using generated functions here really helps performance
-@generated unpack_args(x::Any,::Symbol) = :(x)
-@generated unpack_args(x::HeterogeneousVector, field::Symbol) = :(getproperty(x, field))
-@generated unpack_args(x::Broadcast.Broadcasted{Broadcast.Style{HeterogeneousVector{Names}}}, field::Symbol) where {Names} = :(Broadcast.broadcasted(x.f,unpack_args(x.args,field)...))
-@generated unpack_args(::Tuple{}, ::Symbol) = :()
-@generated unpack_args(x::Tuple, field::Symbol) = :(unpack_args(x[1],field),unpack_args(Base.tail(x),field)...)
-
-mutable struct BcInfoRuntime{BcStyle <: Broadcast.BroadcastStyle}
-    args::Tuple # Actual args, available on runtime, but not compile-time
-    f::Function
-    Args::DataType # Structure of arguments, available both on runtime and compile-time
-    # Only the two last fields need to be mutable
-    current_arg::Int
-    res_args::Vector{Any}
-    function BcInfoRuntime(args::Tuple,BcStyle, F, Args)
-        # No need for storing Axes, it is basically a placeholder for obtaining the other type parameters
-        new{BcStyle}(args, F.instance, Args, 0, Vector{Any}())
-    end
-    function BcInfoRuntime(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}) where {BcStyle, Axes, F, Args}
-        new{BcStyle}(bc.args, F.instance, Args, 0, Vector{Any}())
-    end
-end
-
-function unpack_broadcast_runtime(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, field) where {BcStyle, Axes, F, Args}
-    bc_stack = Vector{BcInfoRuntime{BcStyle}}()
-    # push!(bc_stack, BcInfo(bc.args, BcStyle, F, Args))
-    push!(bc_stack, BcInfoRuntime(bc))
-    res_broadcast = nothing # We must declare this variable here in order to see changes after exiting the loop 
-    while !isempty(bc_stack)
-        bc_info = pop!(bc_stack)
-        res = bc_info.res_args
-        if !(res_broadcast isa Nothing)
-            # Adds the result from the child broadcast if it exists
-            push!(res, res_broadcast)
-        end
-        args = bc_info.args
-        nargs = length(args)
-        # A flag on whether we should jump back to the beginning of the loop
-        # Needed because Julia does not support while-else, nor break statements for outer loops
-        arg_is_bc = false
-        while bc_info.current_arg < nargs
-            bc_info.current_arg += 1
-            arg = args[bc_info.current_arg]    
-            if arg isa Broadcast.Broadcasted{BcStyle}
-                # A new broadcast is found
-                # We first readd the old broadcast to the stack
-                push!(bc_stack, bc_info)
-                # and then the new one
-                push!(bc_stack, BcInfoRuntime(arg))
-                arg_is_bc = true
-                break
-            elseif arg isa HeterogeneousVector
-                arg = getproperty(arg, field)
-            end
-            push!(res, arg)
-        end
-        # In case we have encountered a new broadcast, we start the process over again
-        # one level deeper
-        # Otherwise, we are done handling the arguments and construct the resulting broadcast
-        res_broadcast = arg_is_bc ? nothing : Broadcast.Broadcasted(bc_info.f, Tuple(res))
-    end
-    return res_broadcast
-end
-
 mutable struct BcInfo{BcStyle <: Broadcast.BroadcastStyle}
     f::Function
     Args::DataType # Structure of arguments, available both on runtime and compile-time
@@ -299,6 +235,9 @@ mutable struct BcInfo{BcStyle <: Broadcast.BroadcastStyle}
 
 end
 
+# In case you wonder: Why is the unpacking done in such a convoluted way? Isn't it better to use recursion?
+# The answer is: Yes, it is far easier to use recursion here, but once the broadcasts get complicated enough,
+# Julia gives up on optimizing out the unpacking, leaving the macro expansion to runtime, hampering performance.
 @generated function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, ::Val{field}) where {BcStyle, Axes, F, Args, field}
     # Defines some constants
     generate_info(F, Args, arg_path) = BcInfo(BcStyle, F, Args, arg_path)
@@ -322,7 +261,7 @@ end
         while bc_info.current_arg < nargs
             bc_info.current_arg += 1
             i = bc_info.current_arg
-            current_arg_expr = :(getindex($args_expr, $(i))) 
+            current_arg_expr = :(getfield($args_expr, $(i))) 
             ArgT = arg_types[i]    
             if ArgT <: Broadcast.Broadcasted{BcStyle}
                 # A new broadcast is found
@@ -354,16 +293,8 @@ end
     return res_broadcast
 end
 
-# The constant propagation is appearently important to ensure type stability
-# Otherwise the field symbol does not get propagated, and hence Julia is unable to infer the type returned by getfield
-
 # Using the low-level functions Broadcast.broadcasted or Broadcast.Broadcasted incur considerable
 # overhead due to some oddities in the Julia compiler when the arg tuple is not a bitset
-# This one is for copies and immutable fields
-# @generated get_field_res(f, args::Tuple, field::Symbol) = :(broadcast(f,unpack_args(args, field)...))
-# This one is for copying to a mutable field
-@generated copyto_field_res!(dest::AbstractArray, f, args::Tuple, field::Symbol) = :(dest .= f.(unpack_args(args, field)...))
-@generated copyto_field_res!(dest::Ref, f, args::Tuple, field::Symbol) = :(dest[] =f.(unpack_args(args, field)...))
 
 
 # Broadcasting implementation
@@ -416,17 +347,15 @@ end
 
 # Written specifically to deal with cases such as calculate_residuals!() where the destination is an ordinary Array
 @inline Base.@constprop :aggressive function Base.copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted{Broadcast.Style{HeterogeneousVector{Names}}}) where {Names}
-    f = bc.f
-    args = bc.args
     hv = find_heterogeneous_vector(bc)
     # Points to the first index of the destination array
     dest_idx = firstindex(dest)
     segment_ranges = _compute_segment_ranges(NamedTuple(hv))
     function map_fun(::Val{name}) where {name}
-        unpacked_args = unpack_args(args, name)
+        bc_unpacked = unpack_broadcast(bc, Val(name))
         segment_range = segment_ranges[name]
         dest_segment = view(dest, dest_idx .+ segment_range)
-        dest_segment .= f.(unpacked_args...)
+        Broadcast.materialize!(dest_segment, bc_unpacked)
     end
     map(map_fun, Val.(Names))
     return dest

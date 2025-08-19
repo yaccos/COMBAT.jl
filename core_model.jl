@@ -20,15 +20,9 @@ end
 
 u0 = initialize_system(model_params)
 
-abstol_struct = similar(u0)
+abstol_struct = abstol .* oneunit.(u0)
 
-abstol_struct.A = abstol*oneunit(abstol_struct.A)
-abstol_struct.T = abstol*oneunit(abstol_struct.T)
-abstol_struct.AT = abstol*oneunit(abstol_struct.AT)
-fill!(abstol_struct.B,abstol*oneunit(eltype(abstol_struct.B)))
-
-function ode_system!(du, u, p, t)
-    
+function ode_system!(du, u, p, t)    
     B = u.B
     # We can keep dB as a separate variable since it points to an array,
     # but we must explitly reference dA, du.T, du.AT since they would be
@@ -49,8 +43,6 @@ function ode_system!(du, u, p, t)
     # of arrays
     bound_target_number = @inline  x -> x - index_start
     free_target_number = @inline  x -> p.n - (x - index_start)
-
-    
 
     # Compartment-wise rates 
     binding_rate = @inline  x -> binding_coefficient * free_target_number(x) * A * B[x]
