@@ -20,15 +20,9 @@ end
 
 u0 = initialize_system(model_params)
 
-abstol_struct = similar(u0)
+abstol_struct = abstol .* oneunit.(u0)
 
-abstol_struct.A = abstol*oneunit(abstol_struct.A)
-abstol_struct.T = abstol*oneunit(abstol_struct.T)
-abstol_struct.AT = abstol*oneunit(abstol_struct.AT)
-fill!(abstol_struct.B,abstol*oneunit(eltype(abstol_struct.B)))
-
-function ode_system!(du, u, p, t)
-    
+function ode_system!(du, u, p, t)    
     B = u.B
     # We can keep dB as a separate variable since it points to an array,
     # but we must explitly reference dA, du.T, du.AT since they would be
@@ -49,8 +43,6 @@ function ode_system!(du, u, p, t)
     # of arrays
     bound_target_number = @inline  x -> x - index_start
     free_target_number = @inline  x -> p.n - (x - index_start)
-
-    
 
     # Compartment-wise rates 
     binding_rate = @inline  x -> binding_coefficient * free_target_number(x) * A * B[x]
@@ -78,10 +70,10 @@ function ode_system!(du, u, p, t)
 
     # sum() with a function inside is far more efficient than a broadcasted call over the array followed by a sum operation
     # This approach makes sure there are no or minimal allocations, considerably reducing overhead
-    unbound_targets = sum(x -> free_target_number(x) / oneunit(eltype(B)) * B[x], eachindex(B))
-    bound_targets = sum(x -> bound_target_number(x) / oneunit(eltype(B)) * B[x], eachindex(B))
-    free_targets_released = sum(x -> p.d_x[x]*free_target_number(x) / oneunit(eltype(B)) * B[x], eachindex(B))
-    bound_targets_released = sum(x -> p.d_x[x]*bound_target_number(x) / oneunit(eltype(B)) * B[x], eachindex(B))
+    unbound_targets = sum(x -> free_target_number(x) / unit(eltype(B)) * B[x], eachindex(B))
+    bound_targets = sum(x -> bound_target_number(x) / unit(eltype(B)) * B[x], eachindex(B))
+    free_targets_released = sum(x -> p.d_x[x]*free_target_number(x) / unit(eltype(B)) * B[x], eachindex(B))
+    bound_targets_released = sum(x -> p.d_x[x]*bound_target_number(x) / unit(eltype(B)) * B[x], eachindex(B))
     du.A = -binding_coefficient * (A*T + A*unbound_targets) +  
     p.k_r * (AT +  bound_targets)
     du.T = -binding_coefficient * A*T + p.k_r * AT + free_targets_released
