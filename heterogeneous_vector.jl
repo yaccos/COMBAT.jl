@@ -2,8 +2,6 @@ using Unitful
 using Revise
 import RecursiveArrayTools
 
-
-
 # Copy-catted from DiffEqBase DiffEqBaseUnitfulExt.jl
 Value(x::Number) = x
 Value(x::Type{T}) where {T <:Number} = T
@@ -285,22 +283,23 @@ mutable struct BcInfo{BcStyle <: Broadcast.BroadcastStyle}
     f::Function
     Args::DataType # Structure of arguments, available both on runtime and compile-time
     # The expression needed to evaluated to get to the current node from the root broadcast to unpack
-    expr::Expr
+    # We let it be of the Any type for now as it can be both a Symbol or an Expr
+    expr::Any
     # Only the two last fields need to be mutable
     current_arg::Int
-    res_args::Vector{Expr}
+    res_args::Vector{Any}
     function BcInfo(BcStyle, F, Args, expr)
         # No need for storing Axes, it is basically a placeholder for obtaining the other type parameters
-        new{BcStyle}(F.instance, Args, expr, 0, Vector{Any}())
+        new{BcStyle}(F.instance, Args, expr, 0, Any[])
     end
-    function BcInfo(T::DataType, expr)
-        BcStyle, Axes, F, Args = T.parameters
-        new{BcStyle}(F.instance, Args, expr, 0, Vector{Any}())
+    function BcInfo(BT::Type, expr)
+        BcStyle, Axes, F, Args = BT.parameters
+        new{BcStyle}(F.instance, Args, expr, 0, Any[])
     end
 
 end
 
-@generated function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, ::Val{field}) where {BcStyle, Axes, F, Args, field <: Symbol}
+@generated function unpack_broadcast(bc::Broadcast.Broadcasted{BcStyle, Axes, F, Args}, ::Val{field}) where {BcStyle, Axes, F, Args, field}
     # Defines some constants
     generate_info(F, Args, arg_path) = BcInfo(BcStyle, F, Args, arg_path)
     bc_stack = Vector{BcInfo{BcStyle}}()
@@ -309,42 +308,48 @@ end
     while !isempty(bc_stack)
         bc_info = pop!(bc_stack)
         expr = bc_info.expr
-        args_expr = :(getfield($ex, :args))
+        args_expr = :(getfield($expr, :args))
         res = bc_info.res_args
         if !(res_broadcast isa Nothing)
             # Adds the result from the child broadcast if it exists
             push!(res, res_broadcast)
         end
-        Args = bc_info.Args
-        nargs = length(args)
+        arg_types = bc_info.Args.parameters
+        nargs = length(arg_types)
         # A flag on whether we should jump back to the beginning of the loop
         # Needed because Julia does not support while-else, nor break statements for outer loops
-        arg_is_bc = false
+        ArgT_is_bc = false
         while bc_info.current_arg < nargs
             bc_info.current_arg += 1
-            current_arg_expr = :(getindex($args_expr, $(bc_info.current_arg))) 
-            Arg = Args[bc_info.current_arg]    
-            if Arg <: Broadcast.Broadcasted{BcStyle}
+            i = bc_info.current_arg
+            current_arg_expr = :(getindex($args_expr, $(i))) 
+            ArgT = arg_types[i]    
+            if ArgT <: Broadcast.Broadcasted{BcStyle}
                 # A new broadcast is found
                 # We first readd the old broadcast to the stack
                 push!(bc_stack, bc_info)
                 # then construct the information for the new one
-                new_info = BcInfo(Arg, current_arg_expr)
+                new_info = BcInfo(ArgT, current_arg_expr)
                 # and then add it to the stack
                 push!(bc_stack, new_info)
-                arg_is_bc = true
+                ArgT_is_bc = true
                 break
             end
             
-            if Arg <: HeterogeneousVector
-                current_arg_expr = :(getproperty($current_arg_expr, $field)) 
+            if ArgT <: HeterogeneousVector
+                current_arg_expr = :(getproperty($current_arg_expr, $(QuoteNode(field)))) 
             end
             push!(res, current_arg_expr)
         end
-        # In case we have encountered a new broadcast, we start the process over again
-        # one level deeper
-        # Otherwise, we are done handling the arguments and construct the resulting broadcast
-        res_broadcast = arg_is_bc ? nothing : :(Broadcast.Broadcasted(getfield($expr, :f), ($(res...))))
+        if ArgT_is_bc
+            # In case we have encountered a new broadcast, we start the process over again
+            # one level deeper
+            res_broadcast = nothing
+        else
+            # Otherwise, we are done handling the arguments and construct the resulting broadcast
+            arg_tuple_expr = :(tuple($(res...)))
+            res_broadcast = :(Broadcast.Broadcasted(getfield($expr, :f), $arg_tuple_expr))
+        end
     end
     return res_broadcast
 end
@@ -364,9 +369,11 @@ end
 # Broadcasting implementation
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{HeterogeneousVector{Names}}}) where {Names}
     # Apply broadcast to each field
-    res_args = map(Names) do name
-        Broadcast.materialize(unpack_broadcast(bc, name))
+    function map_fun(::Val{name}) where {name}
+        bc_unpacked = unpack_broadcast(bc, Val(name))
+        Broadcast.materialize(bc_unpacked)
     end
+    res_args = map(map_fun, Val.(Names))
     HeterogeneousVector(NamedTuple{Names}(res_args))
 end
 
@@ -382,7 +389,7 @@ end
     # causing type unstability and costly runtime dispatch
     function map_fun(::Val{name}) where {name}
         target_field = getfield(NamedTuple(dest), name)
-        bc_unpacked = unpack_broadcast(bc, name)
+        bc_unpacked = unpack_broadcast(bc, Val(name))
         if target_field isa Ref
             target_field[] = Broadcast.materialize(bc_unpacked)
         else
