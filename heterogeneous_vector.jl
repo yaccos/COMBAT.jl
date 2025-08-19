@@ -334,14 +334,27 @@ end
 # Compute segment ranges for each field in the NamedTuple
 # The results are zero-indexed ranges, i.e. the first field starts at 0
 function _compute_segment_ranges(x::NamedTuple)
-    current_idx = 0
-    ranges = map(x) do field
-        field_length = _field_length(field)
-        range = current_idx:(current_idx + field_length - 1)
-        current_idx += field_length
-        range
+    # We need zero-based contiguous ranges for each field in order.
+    # NOTE: Iterating a NamedTuple iterates its values, which is what we want for lengths.
+    n = length(x)
+    if n == 0
+        return NamedTuple()
     end
-    return ranges
+    # Collect lengths without allocating intermediate vectors where possible.
+    # map over NamedTuple returns a tuple, so we can splat into cumsum input.
+    field_lengths = map(_field_length, x)  # tuple of Int
+    # Build prefix sums starting with 0 (zero-based indexing for segments).
+    # We avoid concatenations like [0; ...] by constructing a tuple directly.
+    segment_ends = cumsum((0, field_lengths...))  # length n+1 tuple
+    # Create the range for each field i: segment_ends[i] : segment_ends[i+1]-1
+    ranges = ntuple(i -> begin
+            s = segment_ends[i]
+            e = segment_ends[i+1] - 1
+            s:e
+        end, n)
+    # Extract the compile-time field name tuple from the NamedTuple type for a fully-typed result.
+    names = fieldnames(typeof(x))
+    return NamedTuple{names}(ranges)
 end
 
 
