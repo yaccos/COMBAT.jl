@@ -86,9 +86,9 @@ problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_sp
 # Does not work as autodiff is not yet supported
 # sol = solve(problem,AutoTsit5(Rosenbrock23()))
 
-sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
-@btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
-@profview solve(problem,RK4();abstol=abstol_struct, saveat=tsave)
+sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave .|> ustrip)
+@btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave .|> ustrip)
+@profview solve(problem,RK4();abstol=abstol_struct, saveat=tsave .|> ustrip)
 
 using Cthulhu
 @descend solve(problem,RK4())

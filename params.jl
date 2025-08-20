@@ -62,4 +62,4 @@ D_0=maximum_kill_rate,r_T=replication_threshold,k_f=binding_rate,k_r=unbinding_r
 W=molecular_weight,V=total_volume,C=carrying_capacity,k_T=killing_threshold,N_A=N_A,
 f=hypergeom_density_mat, f_scaled=scaled_hypergeom_density_mat,
 d_x = d_x, r_x=r_x,
-)
+) |> (m -> map(ustrip, m))
