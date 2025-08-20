@@ -85,6 +85,27 @@ problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_sp
 
 # Does not work as autodiff is not yet supported
 # sol = solve(problem,AutoTsit5(Rosenbrock23()))
+# This does not work either because the solver wants to evaluate real(eltype(prob.b)) and
+# eltype(prob.b) is not a concrete type
+# sol = solve(problem,AutoTsit5(Rosenbrock23(autodiff=false, concrete_jac=false)))
+
+
+# Does not work because the solver wants to evaluate similar(u, Complex{eltype(u)})
+# sol = solve(problem, RadauIIA3(autodiff=false))
+
+# Do not work for similar reasons
+# sol = solve(problem, Trapezoid(autodiff=false))
+# sol = solve(problem, ImplicitMidpoint(autodiff=false), dt = 1.0u"s")
+# sol = solve(problem, Hairer42(autodiff=false))
+# sol = solve(problem, RKC(), saveat=tsave)
+# sol = solve(problem, QNDF(autodiff=false), saveat=tsave)
+# sol = solve(problem, QBDF(autodiff=false), saveat=tsave)
+# sol = solve(problem, EPIRK4s3A(autodiff=false), saveat=tsave, dt = 1.0u"s")
+# sol = solve(problem, ESERK5(), saveat=tsave)
+
+# Does work, but is does not provide substantial performance benefits over RK4()
+# sol = solve(problem, Tsit5())
+# @btime solve(problem, Tsit5())
 
 sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
