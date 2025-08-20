@@ -3,7 +3,7 @@ using Unitful
 using DifferentialEquations
 using BenchmarkTools
 using Revise
-include("heterogeneous_vector.jl")
+using ComponentArrays
 include("params.jl")
 
 # Initial conditions
@@ -15,7 +15,7 @@ function initialize_system(params)
     B_0 = params.B_0
     B_start = zeros(typeof(B_0),params.n+1)
     B_start[1] = B_0
-    HeterogeneousVector(A=A_0,T=T_0,AT=AT_0,B=B_start)
+    ComponentVector(A=A_0,T=T_0,AT=AT_0,B=B_start)
 end
 
 u0 = initialize_system(model_params)
@@ -83,8 +83,13 @@ end
 
 problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_span),model_params)
 
-# Does not work as autodiff is not yet supported
-# sol = solve(problem,AutoTsit5(Rosenbrock23()))
+sol = solve(problem,AutoTsit5(Rosenbrock23()), saveat=tsave .|> ustrip)
+@btime solve(problem,AutoTsit5(Rosenbrock23()), saveat=tsave .|> ustrip)
+@profview solve(problem,AutoTsit5(Rosenbrock23()), saveat=tsave .|> ustrip)
+
+sol = solve(problem,AutoTsit5(Rosenbrock23(autodiff=false)), saveat=tsave .|> ustrip)
+@btime solve(problem,AutoTsit5(Rosenbrock23(autodiff=false)), saveat=tsave .|> ustrip)
+@profview solve(problem,AutoTsit5(Rosenbrock23(autodiff=false)), saveat=tsave .|> ustrip)
 
 sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave .|> ustrip)
 @btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave .|> ustrip)

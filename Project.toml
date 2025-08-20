@@ -3,6 +3,7 @@ authors = ["Jakob Peder Pettersen <jakob.p.pettersen@uit.no>"]
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
 Cthulhu = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
