@@ -14,7 +14,7 @@ function initialize_system(params)
     AT_0 = zero(A_0)
     B_0 = params.B_0
     B_start = zeros(typeof(B_0),params.n+1)
-    B_start[1] = B_0
+    B_start[begin] = B_0
     HeterogeneousVector(A=A_0,T=T_0,AT=AT_0,B=B_start)
 end
 
