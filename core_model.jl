@@ -83,6 +83,22 @@ end
 
 problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_span),model_params)
 
+sol = solve(problem, ESERK5(), saveat=tsave .|> ustrip)
+@btime solve(problem, ESERK5(), saveat=tsave .|> ustrip)
+@profview solve(problem, ESERK5(), saveat=tsave .|> ustrip)
+
+sol = solve(problem, ROCK2(), saveat=tsave .|> ustrip)
+@btime solve(problem, ROCK2(), saveat=tsave .|> ustrip)
+@profview solve(problem, ROCK2(), saveat=tsave .|> ustrip)
+
+sol = solve(problem, ROCK4(), saveat=tsave .|> ustrip)
+@btime solve(problem, ROCK4(), saveat=tsave .|> ustrip)
+@profview solve(problem, ROCK4(), saveat=tsave .|> ustrip)
+
+sol = solve(problem, RKC(), saveat=tsave .|> ustrip)
+@btime solve(problem, RKC(), saveat=tsave .|> ustrip)
+@profview solve(problem, RKC(), saveat=tsave .|> ustrip)
+
 sol = solve(problem,AutoTsit5(Rosenbrock23()), saveat=tsave .|> ustrip)
 @btime solve(problem,AutoTsit5(Rosenbrock23()), saveat=tsave .|> ustrip)
 @profview solve(problem,AutoTsit5(Rosenbrock23()), saveat=tsave .|> ustrip)
