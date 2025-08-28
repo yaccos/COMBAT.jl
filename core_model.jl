@@ -111,5 +111,40 @@ sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @profview solve(problem,RK4();abstol=abstol_struct, saveat=tsave)
 
-using Cthulhu
-@descend solve(problem,RK4())
+
+import LinearSolve
+
+# Central-difference J*v for HeterogeneousVector + Unitful
+const FD_EPS_CENTRAL = cbrt(eps(Float64))  # ~6e-6, good for central differences
+
+let
+    # Cache variables kept in local scope
+    dup = zero(u0)  # f(u + epsilon*v)
+    dum = zero(u0)  # f(u - epsilon*v)
+    up  = copy(u0)  # u + epsilon*v
+    um  = copy(u0)  # u - epsilon*v
+    global hv_jvp_central!
+    function hv_jvp_central!(Jv, v, u, p, t)
+        # y = (f(u+epsilon*v) - f(u-epsilon*v)) / (2*epsilon)
+        epsilon = FD_EPS_CENTRAL
+        up .= u .+ epsilon .* v
+        ode_system!(dup, up, p, t)
+        um .= u .- epsilon .* v
+        ode_system!(dum, um, p, t)
+        Jv .= (dup .- dum) ./ (2*epsilon)
+        return Jv
+    end
+end
+
+# Matrix-free ODEFunction exposing the J*v
+f_mf = ODEFunction(ode_system!;
+    jvp = hv_jvp_central!,
+)
+
+problem_mf = ODEProblem(f_mf, u0, (zero(model_params.t_span), model_params.t_span), model_params)
+
+# Stiff solve, matrix-free (no AD, no dense Jacobian)
+sol = solve(problem_mf,
+            Rosenbrock23(linsolve = LinearSolve.KrylovJL_GMRES(), autodiff = false);
+            abstol = abstol_struct,
+            saveat = tsave)
