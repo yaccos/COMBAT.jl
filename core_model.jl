@@ -110,6 +110,3 @@ problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_sp
 sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @profview solve(problem,RK4();abstol=abstol_struct, saveat=tsave)
-
-using Cthulhu
-@descend solve(problem,RK4())
