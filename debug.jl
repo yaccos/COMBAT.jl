@@ -1,4 +1,4 @@
-using Unitful
+using DynamicQuantities
 using BenchmarkTools
 include("heterogeneous_vector.jl")
 

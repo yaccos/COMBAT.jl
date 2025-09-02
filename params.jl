@@ -1,13 +1,15 @@
 using PhysicalConstants.CODATA2018
 using Distributions
 using LinearAlgebra
-using Unitful
+using DynamicQuantities
+import Unitful
 include("heterogeneous_vector.jl")
 
-@refunit cell "cell" Cells Unitful.𝐍 false
+Unitful.@refunit cell "cell" Cells Unitful.𝐍 false
+
 
 n_targets = 100
-starting_population = 1e6cell
+starting_population = convert(DynamicQuantities.RealQuantity, 1e6cell)
 
 treatment_length = 7.0u"d" |> u"s" # 86400.0u"s", we convert it right now
 # in order to avoid type conversion when simulating
