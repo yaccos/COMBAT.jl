@@ -265,11 +265,11 @@ end
             ArgT = arg_types[i]    
             if ArgT <: Broadcast.Broadcasted{BcStyle}
                 # A new broadcast is found
-                # We first readd the old broadcast to the stack
+                # We first re-add the old broadcast to the stack
                 push!(bc_stack, bc_info)
                 # then construct the information for the new one
                 new_info = BcInfo(ArgT, current_arg_expr)
-                # and then add it to the stack
+                # and then push it to the stack
                 push!(bc_stack, new_info)
                 ArgT_is_bc = true
                 break
