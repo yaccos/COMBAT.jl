@@ -1,8 +1,9 @@
 using PhysicalConstants.CODATA2018
-using DynamicQuanitites
+using DynamicQuantities
 using DifferentialEquations
 using BenchmarkTools
 using Revise
+using ComponentArrays
 include("heterogeneous_vector.jl")
 include("params.jl")
 
@@ -13,9 +14,9 @@ function initialize_system(params)
     T_0 = zero(A_0)
     AT_0 = zero(A_0)
     B_0 = params.B_0
-    B_start = zeros(typeof(B_0),params.n+1)
+    B_start = QuantityArray(B_0 * zeros(Float64, params.n+1))
     B_start[begin] = B_0
-    HeterogeneousVector(A=A_0,T=T_0,AT=AT_0,B=B_start)
+    ComponentArray(A=A_0,T=T_0,AT=AT_0,B=B_start)
 end
 
 u0 = initialize_system(model_params)

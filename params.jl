@@ -2,18 +2,62 @@ using PhysicalConstants.CODATA2018
 using Distributions
 using LinearAlgebra
 using DynamicQuantities
+
+struct CellDimensions{R} <: AbstractDimensions{R}
+    length::R
+    mass::R
+    time::R
+    # current::R
+    # temperature::R
+    # luminosity::R
+    amount::R
+    cell::R
+end
+
+function DynamicQuantities.dimension_name(::CellDimensions, k::Symbol)
+    default_dimensions = (
+        length = "m",
+        mass = "kg",
+        time = "s",
+        current = "A",
+        temperature = "K",
+        luminosity = "cd",
+        amount = "mol",
+        cell = "cell",
+    )
+    return get(default_dimensions, k, string(k))
+end
+
+x = Quantity(1.0, CellDimensions(length=1, cell=-1))
+
+function Base.promote_rule(::Type{CellDimensions{R1}}, ::Type{Dimensions{R2}}) where {R1,R2}
+    return CellDimensions{promote_type(R1, R2)}
+end
+function Base.convert(::Type{Quantity{T,CellDimensions{R}}}, q::Quantity{<:Any,<:Dimensions}) where {T,Din,R}
+    val = ustrip(q)
+    d = dimension(q)
+    return Quantity(
+        T(val),
+        CellDimensions{R}(;
+            d.length, d.mass, d.time, d.amount, cell=zero(R)
+        )
+    )
+end;
+
+const cell = Quantity(1.0, CellDimensions(cell = 1))
+
 import Unitful
 include("heterogeneous_vector.jl")
 
-Unitful.@refunit cell "cell" Cells Unitful.𝐍 false
+# Unitful.@refunit cell "cell" Cells Unitful.𝐍 false
 
 
 n_targets = 100
-starting_population = convert(DynamicQuantities.RealQuantity, 1e6cell)
+starting_population = 1e6cell
 
-treatment_length = 7.0u"d" |> u"s" # 86400.0u"s", we convert it right now
+treatment_length = 7.0us"d" |> us"s" # 86400.0u"s", we convert it right now
 # in order to avoid type conversion when simulating
-tsave = 0u"s":1u"hr":treatment_length .|> u"s" # Saves the evolution of the system for each minute
+tsave = 0us"s":(1us"h" |> us"s"):treatment_length .|> us"s" # Saves the evolution of the system for each minute
 # We do not need any better accuracy than 0.01
 abstol = 1e-2
 
@@ -31,7 +75,7 @@ unbinding_rate = 0.01u"1/s"
 carrying_capacity = 1e9cell
 molecular_weight = 555.5u"g/mol"
 binding_rate = 10000.0u"L/mol/s"
-N_A = AvogadroConstant
+N_A = DynamicQuantities.Constants.N_A
 binding_coefficient = binding_rate / (total_volume * N_A)
 
 #initial_antibiotic_level = 1e3 / cell * starting_population / total_volume * molecular_weight / N_A  # 1e3 molecules / cell as in Test case 2
@@ -57,7 +101,7 @@ cache_rho_fun = similar(starting_population .* r_x)
 
 # Convert from mass per volume to number of molecules in entire volume
 # Also makes sure we cancel out the mass units
-A_n_molecules = uconvert(NoUnits, initial_antibiotic_level / molecular_weight * total_volume * N_A)
+A_n_molecules = initial_antibiotic_level / molecular_weight * total_volume * DynamicQuantities.Constants.N_A
 
 model_params = (n=n_targets,B_0=starting_population,t_span=treatment_length,A=A_n_molecules,
 D_0=maximum_kill_rate,r_T=replication_threshold,k_f=binding_rate,k_r=unbinding_rate,
