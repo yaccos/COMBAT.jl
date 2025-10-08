@@ -60,6 +60,7 @@ treatment_length = 7.0us"d" |> us"s" # 86400.0u"s", we convert it right now
 tsave = 0us"s":(1us"h" |> us"s"):treatment_length .|> us"s" # Saves the evolution of the system for each minute
 # We do not need any better accuracy than 0.01
 abstol = 1e-2
+reltol = 1e-5 
 
 # When the numbers are suffixed with a point, they are stored as Float64 instead of Int64
 # Otherwise, computations on integers have a slight overhead since they must be converted to Float64 first

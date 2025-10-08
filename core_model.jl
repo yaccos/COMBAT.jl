@@ -14,7 +14,7 @@ function initialize_system(params)
     T_0 = zero(A_0)
     AT_0 = zero(A_0)
     B_0 = params.B_0
-    B_start = QuantityArray(B_0 * zeros(Float64, params.n+1))
+    B_start = QuantityArray(B_0 .* zeros(B_0 |> ustrip |> typeof, params.n+1))
     B_start[begin] = B_0
     ComponentArray(A=A_0,T=T_0,AT=AT_0,B=B_start)
 end
@@ -22,6 +22,9 @@ end
 u0 = initialize_system(model_params)
 
 abstol_struct = abstol .* oneunit.(u0)
+reltol_struct = reltol .* one.(u0)
+
+
 
 function ode_system!(du, u, p, t)    
     B = u.B
@@ -71,10 +74,10 @@ function ode_system!(du, u, p, t)
 
     # sum() with a function inside is far more efficient than a broadcasted call over the array followed by a sum operation
     # This approach makes sure there are no or minimal allocations, considerably reducing overhead
-    unbound_targets = sum(x -> free_target_number(x) / unit(eltype(B)) * B[x], eachindex(B))
-    bound_targets = sum(x -> bound_target_number(x) / unit(eltype(B)) * B[x], eachindex(B))
-    free_targets_released = sum(x -> p.d_x[x]*free_target_number(x) / unit(eltype(B)) * B[x], eachindex(B))
-    bound_targets_released = sum(x -> p.d_x[x]*bound_target_number(x) / unit(eltype(B)) * B[x], eachindex(B))
+    unbound_targets = sum(x -> free_target_number(x) / oneunit(B[x]) * B[x], eachindex(B))
+    bound_targets = sum(x -> bound_target_number(x) / oneunit(B[x]) * B[x], eachindex(B))
+    free_targets_released = sum(x -> p.d_x[x]*free_target_number(x) / oneunit(B[x]) * B[x], eachindex(B))
+    bound_targets_released = sum(x -> p.d_x[x]*bound_target_number(x) / oneunit(B[x]) * B[x], eachindex(B))
     du.A = -binding_coefficient * (A*T + A*unbound_targets) +  
     p.k_r * (AT +  bound_targets)
     du.T = -binding_coefficient * A*T + p.k_r * AT + free_targets_released
@@ -108,6 +111,6 @@ problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_sp
 # sol = solve(problem, Tsit5())
 # @btime solve(problem, Tsit5())
 
-sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
+sol = solve(problem,RK4(); abstol=abstol_struct, reltol=reltol_struct, saveat=tsave)
 @btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @profview solve(problem,RK4();abstol=abstol_struct, saveat=tsave)
