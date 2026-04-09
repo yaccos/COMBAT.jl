@@ -1,7 +1,7 @@
+using Unitful
 using PhysicalConstants.CODATA2018
 using Distributions
 using LinearAlgebra
-using Unitful
 include("heterogeneous_vector.jl")
 
 @refunit cell "cell" Cells Unitful.𝐍 false
@@ -9,26 +9,26 @@ include("heterogeneous_vector.jl")
 n_targets = 100
 starting_population = 1e6cell
 
-treatment_length = 7.0u"d" |> u"s" # 86400.0u"s", we convert it right now
+treatment_length = 7.0Unitful.u"d" |> Unitful.u"s" # 86400.0u"s", we convert it right now
 # in order to avoid type conversion when simulating
-tsave = 0u"s":1u"hr":treatment_length .|> u"s" # Saves the evolution of the system for each minute
+tsave = 0Unitful.u"s":1Unitful.u"hr":treatment_length .|> Unitful.u"s" # Saves the evolution of the system for each minute
 # We do not need any better accuracy than 0.01
 abstol = 1e-2
 
 # When the numbers are suffixed with a point, they are stored as Float64 instead of Int64
 # Otherwise, computations on integers have a slight overhead since they must be converted to Float64 first
-initial_antibiotic_level = 1.0u"mg/L"
-maximum_kill_rate = 0.001u"1/s"
+initial_antibiotic_level = 1.0Unitful.u"mg/L"
+maximum_kill_rate = 0.001Unitful.u"1/s"
 killing_threshold = 60
 replication_threshold = 50
-r_max = 0.00025u"1/s"
-max_kill_rate = 0.001u"1/s"
-total_volume = 1.0u"L"
-intracellular_volume = 1e-15u"L"/cell
-unbinding_rate = 0.01u"1/s"
+r_max = 0.00025Unitful.u"1/s"
+max_kill_rate = 0.001Unitful.u"1/s"
+total_volume = 1.0Unitful.u"L"
+intracellular_volume = 1e-15Unitful.u"L"/cell
+unbinding_rate = 0.01Unitful.u"1/s"
 carrying_capacity = 1e9cell
-molecular_weight = 555.5u"g/mol"
-binding_rate = 10000.0u"L/mol/s"
+molecular_weight = 555.5Unitful.u"g/mol"
+binding_rate = 10000.0Unitful.u"L/mol/s"
 N_A = AvogadroConstant
 binding_coefficient = binding_rate / (total_volume * N_A)
 
@@ -55,7 +55,7 @@ cache_rho_fun = similar(starting_population .* r_x)
 
 # Convert from mass per volume to number of molecules in entire volume
 # Also makes sure we cancel out the mass units
-A_n_molecules = uconvert(NoUnits, initial_antibiotic_level / molecular_weight * total_volume * N_A)
+A_n_molecules = Unitful.uconvert(Unitful.NoUnits, initial_antibiotic_level / molecular_weight * total_volume * N_A)
 
 model_params = (n=n_targets,B_0=starting_population,t_span=treatment_length,A=A_n_molecules,
 D_0=maximum_kill_rate,r_T=replication_threshold,k_f=binding_rate,k_r=unbinding_rate,
