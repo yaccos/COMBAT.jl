@@ -36,10 +36,19 @@ function build_mtk_problem(params; check_units = true)
     @parameters rate_p [unit = DynamicQuantities.u"s^-1"]
     D = Differential(t)
 
-    carrying = (C_p - sum(B[i] for i in 1:nB)) / C_p
-    rho = [rate_p * carrying * sum(2 * f_dimless[i, j] * r_x[j] * B[j] for j in 1:nB) for i in 1:nB]
+    sum_B = sum(B[i] for i in 1:nB)
+    carrying = (C_p - sum_B) / C_p
 
-    eqs = Equation[]
+    rx_times_B = [2 * r_x[j] * B[j] for j in 1:nB]
+    rho = rate_p * carrying * (f_dimless * rx_times_B)
+    
+    unbound_targets = sum((n - (i - 1)) * B[i] for i in 1:nB)
+    bound_targets = sum((i - 1) * B[i] for i in 1:nB)
+
+    free_targets_released = sum(rate_p * d_x[i] * (n - (i - 1)) * B[i] for i in 1:nB)
+    bound_targets_released = sum(rate_p * d_x[i] * (i - 1) * B[i] for i in 1:nB)
+
+    eqs = Vector{Equation}(undef, nB + 3)
 
     for i in 1:nB
         free_targets = n - (i - 1)
@@ -64,23 +73,18 @@ function build_mtk_problem(params; check_units = true)
             dBi = binding_prev - unbinding_here - binding_here + unbinding_next - division_rate - death_rate + rho[i]
         end
 
-        push!(eqs, D(B[i]) ~ dBi)
+        eqs[i] = D(B[i]) ~ dBi
     end
 
-    unbound_targets = sum((n - (i - 1)) * B[i] for i in 1:nB)
-    bound_targets = sum((i - 1) * B[i] for i in 1:nB)
-    free_targets_released = sum(rate_p * d_x[i] * (n - (i - 1)) * B[i] for i in 1:nB)
-    bound_targets_released = sum(rate_p * d_x[i] * (i - 1) * B[i] for i in 1:nB)
-
-    push!(eqs, D(A) ~ -beta_p * (A * T + A * unbound_targets) + k_r_p * (AT + bound_targets))
-    push!(eqs, D(T) ~ -beta_p * A * T + k_r_p * AT + free_targets_released)
-    push!(eqs, D(AT) ~ beta_p * A * T - k_r_p * AT + bound_targets_released)
+    eqs[nB + 1] = D(A) ~ -beta_p * (A * T + A * unbound_targets) + k_r_p * (AT + bound_targets)
+    eqs[nB + 2] = D(T) ~ -beta_p * A * T + k_r_p * AT + free_targets_released
+    eqs[nB + 3] = D(AT) ~ beta_p * A * T - k_r_p * AT + bound_targets_released
 
     if check_units && !ModelingToolkit.validate(eqs)
         error("ModelingToolkit unit validation failed. Inspect equation warnings above for offending terms.")
     end
 
-    states = [A, T, AT, B...]
+    states = [A, T, AT, collect(B)...]
     params_sym = [beta_p, k_r_p, C_p, rate_p]
     @named combat_sys = ODESystem(eqs, t, states, params_sym)
     combat_sys_compiled = mtkcompile(combat_sys)
@@ -93,7 +97,7 @@ function build_mtk_problem(params; check_units = true)
     return prob, combat_sys_compiled
 end
 
-function solve_mtk_model(params; solver = RK4(), abstol = abstol, reltol = 1e-6, saveat = strip_units_array(tsave), check_units = true)
+function solve_mtk_model(params; solver = DifferentialEquations.Rodas5P(), abstol = abstol, reltol = 1e-6, saveat = strip_units_array(tsave), check_units = true)
     prob, sys = build_mtk_problem(params; check_units = check_units)
     sol = solve(prob, solver; abstol = abstol, reltol = reltol, saveat = saveat)
     return sol, prob, sys
