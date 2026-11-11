@@ -1,6 +1,6 @@
 using Unitful
 using BenchmarkTools
-include("heterogeneous_vector.jl")
+using HeterogeneousArrays
 
 x_1 = HeterogeneousVector(u=3.1u"m", v=5.2u"s")
 x_2 = HeterogeneousVector(u=1.8u"m", v=8.44u"s")

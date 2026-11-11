@@ -3,7 +3,8 @@ using Unitful
 using DifferentialEquations
 using BenchmarkTools
 using Revise
-include("heterogeneous_vector.jl")
+using HeterogeneousArrays
+
 include("params.jl")
 
 # Initial conditions
@@ -107,6 +108,6 @@ problem = ODEProblem(ode_system!,u0,(zero(model_params.t_span),model_params.t_sp
 # sol = solve(problem, Tsit5())
 # @btime solve(problem, Tsit5())
 
-sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
+@time sol = solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @btime solve(problem,RK4(); abstol=abstol_struct, saveat=tsave)
 @profview solve(problem,RK4();abstol=abstol_struct, saveat=tsave)
