@@ -35,9 +35,9 @@ AU_0 = zero(initial_antibiotic_concentration)
 N_A = AvogadroConstant
 molecular_weight = 444.43u"g/mol" # Specific for tetracycline
 
-# Educated guesses, cannot find them in the paper
+# From Table S4
 intracellular_volume = 1e-15u"L"/cell # Same as in the paper by Tran et al. 2022
-carrying_capacity = 2e+9cell/u"mL"
+carrying_capacity = 1e+9cell/u"mL"
 
 model_params = (f_c=critical_ribosome_fraction, p=cell_membrane_permability, k_ur=unspecific_association_rate, k_uf=unspecific_dissociation_rate, k_f=k_f, k_r=k_r,
  T0=n_targets, B_0=initial_bacterial_density, tspan=treatment_length, tsave=tsave, K=carrying_capacity, T_0=n_targets,
