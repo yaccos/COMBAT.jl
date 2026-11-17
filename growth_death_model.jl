@@ -5,7 +5,7 @@ using BenchmarkTools
 using Revise
 using HeterogeneousArrays
 
-include("params.jl")
+include("growth_death_params.jl")
 
 # Initial conditions
 
